@@ -42,12 +42,16 @@ const withTimeout = (promise, timeout) => {
 const generateCustomId = async (client) => {
   try {
     const year = new Date().getFullYear();
+  
+
+
     const result = await client.query(
-      `SELECT COALESCE(MAX(SUBSTRING(custom_id FROM 10)::int), 0) AS last_id 
-       FROM orders 
-       WHERE custom_id LIKE $1`,
-      [`NPO-${year}-%`]
-    );
+  `SELECT COALESCE(MAX((regexp_matches(custom_id, 'NPO-\\d{4}-(\\d{5})'))[1]::int), 0) AS last_id 
+   FROM orders 
+   WHERE custom_id LIKE $1`,
+  [`NPO-${year}-%`]
+);
+
     const lastId = result.rows[0].last_id || 0;
     const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
     return newId;
