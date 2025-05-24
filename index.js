@@ -30,10 +30,12 @@ import acceptedManagerApi from './api/acceptManager/[id]+api.js';
 import acceptedSupervisorQoutationApi from './api/acceptSupervisorQuotation/[id]+api.js';
 import acceptedStorekeeperQoutationApi from './api/acceptStorekeeperQuotation/[id]+api.js';
 import acceptedManagerQoutationApi from './api/acceptManagerQuotation/[id]+api.js';
-import supervisorOrderApi from './api/order/create+api.js'
+//import supervisorOrderApi from './api/order/create+api.js'
 import deliverdApi from './api/delivered/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
 import quotationSupervisorApi from './api/quotation/supervisor+api.js'
+import supervisorOrderApi from './api/order/supervisor+api.js'; 
+
 
 const app = express();
 
