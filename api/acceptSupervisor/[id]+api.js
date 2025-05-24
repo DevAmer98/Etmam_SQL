@@ -148,7 +148,7 @@ router.put('/acceptSupervisor/:id', async (req, res) => {
 
   try {
     // Step 1: Verify that the supervisor exists
-    const getSupervisorQuery = 'SELECT id FROM supervisors WHERE id = $1';
+   /* const getSupervisorQuery = 'SELECT id FROM supervisors WHERE id = $1';
     const supervisorResult = await executeWithRetry(async () => {
       return await withTimeout(client.query(getSupervisorQuery), 10000); // 10-second timeout
     });
@@ -156,6 +156,8 @@ router.put('/acceptSupervisor/:id', async (req, res) => {
     if (supervisorResult.rows.length === 0) {
       return res.status(404).json({ error: 'Supervisor not found' });
     }
+
+    */
     const updateOrderQuery = `
       UPDATE orders 
       SET supervisoraccept = 'accepted',
