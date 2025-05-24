@@ -266,7 +266,7 @@ router.get('/supervisors', async (req, res) => {
   } catch (error) {
     console.error('Error fetching supervisors:', error);
     res.status(500).json({
-      error: error.message || 'Error fetching supervisors',
+      error: error.message || 'Error fetching supervisors', 
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   } finally {
@@ -275,7 +275,6 @@ router.get('/supervisors', async (req, res) => {
 });
 
 
-// GET /salesreps/emails (new endpoint)
 router.get('/supervisors/emails', async (req, res) => {
   const client = await pool.connect();
   try {
@@ -324,35 +323,5 @@ router.get('/supervisors/emails', async (req, res) => {
   }});
 
 
-// GET /api/supervisors/email
-/*router.get('/supervisors/email', async (req, res) => {
-  const { email } = req.query; 
-
-  if (!email) {
-    return res.status(400).json({ error: 'Missing email' });
-  }
-
-  const client = await pool.connect();
-  try {
-    const query = 'SELECT * FROM supervisors WHERE email = $1';
-    const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(query, [email]), 10000); // 10-second timeout
-    });
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Supervisor not found' });
-    }
-
-    return res.status(200).json({ id: result.rows[0].id });
-  } catch (error) {
-    console.error('Error fetching supervisor ID:', error);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      details: error.message,
-    });
-  } finally {
-    client.release();
-  }
-});*/
 
 export default router;

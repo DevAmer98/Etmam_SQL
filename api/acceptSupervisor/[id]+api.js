@@ -137,10 +137,10 @@ async function sendNotificationToStorekeeper(message, title = 'Notification') {
 // PUT /api/orders/:id/accept-supervisor
 router.put('/acceptSupervisor/:id', async (req, res) => {
   const { id } = req.params;
-    const { supervisor_id } = req.body; // Supervisor ID passed in the request body
+    //const { supervisor_id } = req.body; // Supervisor ID passed in the request body
 
 
-   if (!id || !supervisor_id) {
+   if (!id) {
     return res.status(400).json({ error: 'Missing quotation ID or supervisor ID' });
   }
 
@@ -150,7 +150,7 @@ router.put('/acceptSupervisor/:id', async (req, res) => {
     // Step 1: Verify that the supervisor exists
     const getSupervisorQuery = 'SELECT id FROM supervisors WHERE id = $1';
     const supervisorResult = await executeWithRetry(async () => {
-      return await withTimeout(client.query(getSupervisorQuery, [supervisor_id]), 10000); // 10-second timeout
+      return await withTimeout(client.query(getSupervisorQuery), 10000); // 10-second timeout
     });
 
     if (supervisorResult.rows.length === 0) {
@@ -164,7 +164,7 @@ router.put('/acceptSupervisor/:id', async (req, res) => {
       WHERE id = $1
     `;
     await executeWithRetry(async () => {
-      return await withTimeout(pool.query(updateOrderQuery, [id, supervisor_id]), 10000); // 10-second timeout
+      return await withTimeout(pool.query(updateOrderQuery, [id]), 10000); // 10-second timeout
     });
 
     await sendNotificationToStorekeeper(
