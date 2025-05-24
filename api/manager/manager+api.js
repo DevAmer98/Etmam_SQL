@@ -259,12 +259,63 @@ router.get('/managers', async (req, res) => {
       managers,
       totalCount,
       currentPage: page,
-      totalPages: Math.ceil(totalCount / limit),
+      totalPages: Math.ceil(totalCount / limit), 
     });
   } catch (error) {
     console.error('Error fetching managers:', error);
     res.status(500).json({
       error: error.message || 'Error fetching managers',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+// GET /salesreps/emails (new endpoint)
+router.get('/managers/emails', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { email } = req.query; // Get the email from query parameters
+
+    // Validate email format (optional)
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or missing email',
+      });
+    }
+
+    const query = 'SELECT * FROM managers WHERE email = $1';
+    const result = await executeWithRetry(async () => {
+      return await withTimeout(client.query(query, [email]), 10000); // 10-second timeout
+    });
+
+    if (!result) {
+      console.error('No result from the query.');
+      throw new Error('No result from the query.');
+    }
+
+    const manager = result.rows;
+
+    if (manager.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Manager not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      manager: manager[0], // Return the first matching sales rep
+    });
+  } catch (error) {
+    console.error('Error fetching Manager:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch Manager',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   } finally {
