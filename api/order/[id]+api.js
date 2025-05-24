@@ -114,11 +114,56 @@ router.put('/orders/:id', async (req, res) => {
       notes,
       products,
       status = 'not Delivered',
-      total_price,
     } = body;
+
+    // Fetch the current quotation to get the custom_id
+      const getOrderQuery = `SELECT custom_id FROM orders WHERE id = $1`;
+      const orderResult = await executeWithRetry(async () => {
+        return await withTimeout(client.query(getOrderQuery, [id]), 10000); // 10-second timeout
+      });
+
+      if (orderResult.rows.length === 0) {
+        await client.query('ROLLBACK'); // Rollback if quotation not found
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      const currentCustomId = orderResult.rows[0].custom_id;
+      let newCustomId;
+
+      // Determine the next revision number
+      const revisionMatch = currentCustomId.match(/Rev(\d+)$/);
+      if (revisionMatch) {
+        const currentRevision = parseInt(revisionMatch[1], 10);
+        newCustomId = currentCustomId.replace(/Rev\d+$/, `Rev${currentRevision + 1}`);
+      } else {
+        newCustomId = `${currentCustomId} Rev1`;
+      }
 
     // Set `actual_delivery_date` if the status is "delivered"
     const actualDeliveryDate = status === 'delivered' ? new Date().toISOString() : null;
+
+
+
+         // Calculate totals based on products
+      let totalPrice = 0;
+      let totalVat = 0;
+      let totalSubtotal = 0; 
+
+      if (products && products.length > 0) {
+        for (const product of products) {
+          const { price, quantity } = product;
+          const numericPrice = parseFloat(price) || 0;
+          const numericQuantity = parseFloat(quantity) || 0;
+
+          const totalPriceForProduct = numericPrice * numericQuantity; // Total price for the quantity
+          const vat = totalPriceForProduct * 0.15; // VAT is 15% of the total price for the quantity
+          const subtotal = totalPriceForProduct + vat; // Subtotal is total price + VAT
+
+          totalPrice += totalPriceForProduct;
+          totalVat += vat;
+          totalSubtotal += subtotal;
+        }
+      }
 
     const updateOrderQuery = `
       UPDATE orders 
@@ -133,8 +178,11 @@ router.put('/orders/:id', async (req, res) => {
           updated_at = CURRENT_TIMESTAMP,
           actual_delivery_date = COALESCE($6, actual_delivery_date),
           storekeeper_notes = $7,
-          total_price = $8
-      WHERE id = $9
+          total_price = $8,
+          total_vat = $9,
+          total_subtotal = $10,
+          custom_id = $11
+      WHERE id = $12
     `;
 
     await executeWithRetry(async () => {
@@ -147,7 +195,10 @@ router.put('/orders/:id', async (req, res) => {
           status,
           actualDeliveryDate,
           body.storekeeper_notes || null,
-          total_price,
+          totalPrice,
+          totalVat,
+          totalSubtotal,
+          newCustomId, // Updated custom_id with revision number
           id,
         ]),
         10000 // 10-second timeout
@@ -162,12 +213,22 @@ router.put('/orders/:id', async (req, res) => {
 
       for (const product of products) {
         const { section, type, quantity, description,price } = product;
+
+          // Calculate VAT and subtotal for each product
+          const numericPrice = parseFloat(price) || 0;
+          const numericQuantity = parseFloat(quantity) || 0;
+
+          const totalPriceForProduct = numericPrice * numericQuantity; // Total price for the quantity
+          const vat = totalPriceForProduct * 0.15; // VAT is 15% of the total price for the quantity
+          const subtotal = totalPriceForProduct + vat; // Subtotal is total price + VAT
+
+
         await executeWithRetry(async () => {
           return await withTimeout(
             pool.query(
-              `INSERT INTO order_products (order_id, section, type, description, quantity,price) 
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [id, section, type, description, quantity, price]
+              `INSERT INTO order_products (order_id, section, type, description, quantity,price, vat, subtotal) 
+               VALUES ($1, $2, $3, $4, $5, $6,$7,$8)`,
+              [id, section, type, description, quantity, price,vat, subtotal]
             ),
             10000 // 10-second timeout
           );

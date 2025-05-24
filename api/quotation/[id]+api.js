@@ -137,8 +137,6 @@ router.put('/quotations/:id', async (req, res) => {
         notes,
         products,
         status = 'not Delivered',
-        storekeeperaccept = 'pending',
-        supervisoraccept = 'pending',
       } = body;
 
       // Fetch the current quotation to get the custom_id
@@ -170,7 +168,7 @@ router.put('/quotations/:id', async (req, res) => {
       // Calculate totals based on products
       let totalPrice = 0;
       let totalVat = 0;
-      let totalSubtotal = 0;
+      let totalSubtotal = 0; 
 
       if (products && products.length > 0) {
         for (const product of products) {
@@ -196,16 +194,17 @@ router.put('/quotations/:id', async (req, res) => {
             delivery_type = $3,
             notes = $4,
             status = $5,
-            storekeeperaccept = $6,
-            supervisoraccept = $7,
+            storekeeperaccept = 'pending',
+          supervisoraccept = 'pending',
+          manageraccept = 'pending',
             updated_at = CURRENT_TIMESTAMP,
-            actual_delivery_date = COALESCE($8, actual_delivery_date),
-            storekeeper_notes = $9,
-            total_price = $10,
-            total_vat = $11,
-            total_subtotal = $12,
-            custom_id = $13
-        WHERE id = $14
+            actual_delivery_date = COALESCE($6, actual_delivery_date),
+            storekeeper_notes = $7,
+            total_price = $8,
+            total_vat = $9,
+            total_subtotal = $10,
+            custom_id = $11
+        WHERE id = $12
       `;
 
       await executeWithRetry(async () => {
@@ -216,8 +215,6 @@ router.put('/quotations/:id', async (req, res) => {
             delivery_type,
             notes || null,
             status,
-            storekeeperaccept,
-            'pending', // Set supervisoraccept to 'pending'
             actualDeliveryDate,
             body.storekeeper_notes || null,
             totalPrice,
