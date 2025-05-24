@@ -151,7 +151,7 @@ router.put('/acceptSupervisor/:id', async (req, res) => {
       WHERE id = $1
     `;
     await executeWithRetry(async () => {
-      return await withTimeout(pool.query(updateOrderQuery, [id]), 10000); // 10-second timeout
+      return await withTimeout(pool.query(updateOrderQuery, [id, supervisor_id]), 10000); // 10-second timeout
     });
 
     await sendNotificationToStorekeeper(
