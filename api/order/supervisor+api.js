@@ -42,16 +42,23 @@ const withTimeout = (promise, timeout) => {
 const generateCustomId = async (client) => {
   try {
     const year = new Date().getFullYear();
-  
-
-
+    
+    // Use a more robust query that handles potential non-numeric suffixes
     const result = await client.query(
-  `SELECT COALESCE(MAX((regexp_matches(custom_id, 'NPO-\\d{4}-(\\d{5})'))[1]::int), 0) AS last_id 
-   FROM orders 
-   WHERE custom_id LIKE $1`,
-  [`NPO-${year}-%`]
-);
-
+      `SELECT COALESCE(
+        MAX(
+          CASE 
+            WHEN SUBSTRING(custom_id FROM 'NPO-[0-9]{4}-([0-9]+)')::text ~ '^[0-9]+$' 
+            THEN SUBSTRING(custom_id FROM 'NPO-[0-9]{4}-([0-9]+)')::int
+            ELSE 0
+          END
+        ), 0
+      ) AS last_id 
+      FROM orders 
+      WHERE custom_id ~ $1`,
+      [`^NPO-${year}-[0-9]+`]
+    );
+    
     const lastId = result.rows[0].last_id || 0;
     const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
     return newId;
@@ -60,7 +67,6 @@ const generateCustomId = async (client) => {
     throw new Error('Failed to generate order ID');
   }
 };
-
 // Function to send notifications to supervisors
 async function sendNotificationToManager(message, title = 'Notification') {
   let client;
