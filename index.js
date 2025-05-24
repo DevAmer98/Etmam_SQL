@@ -34,7 +34,7 @@ import acceptedManagerQoutationApi from './api/acceptManagerQuotation/[id]+api.j
 import deliverdApi from './api/delivered/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
 import quotationSupervisorApi from './api/quotation/supervisor+api.js'
-import supervisorOrderApi from './api/order/supervisor+api.js'; 
+import ordersupervisorApi from './api/order/supervisor+api.js'; 
 
 
 const app = express();
@@ -55,7 +55,7 @@ app.use('/api', quotationApi);
 app.use('/api/order', supervisorAcceptOrderApi); // Mount under /api/order
 app.use('/api/order', storekeeperAcceptOrderApi);
 app.use('/api/order', salesOrderApi);
-app.use('/api/order/supervisor', supervisorOrderApi);
+app.use('/api', ordersupervisorApi); // Use your new router
 app.use('/api/quotation', salesQuotationApi);
 app.use('/api', quotationSupervisorApi); // Use your new router
 app.use('/api/quotation', supervisorAcceptQuotationApi); // Mount under /api/order
