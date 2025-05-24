@@ -1,11 +1,13 @@
 import express from 'express';
 import moment from 'moment-timezone';
+import admin from '../../firebase-init.js';
 import pkg from 'pg';
 const { Pool } = pkg;
 
+
 const router = express.Router();
 
-// Create a connection pool
+// PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
@@ -13,15 +15,9 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000, // Increased timeout
 });
 
-router.use(express.json());
+router.use(express.json()); // Middleware to parse JSON bodies
 
-const withTimeout = (promise, timeout) => {
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Database query timed out')), timeout)
-  );
-  return Promise.race([promise, timeoutPromise]);
-};
-
+// Utility function to retry database operations
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -34,7 +30,109 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+// Utility function to add timeout to database queries
+const withTimeout = (promise, timeout) => {
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Database query timed out')), timeout)
+  );
+  return Promise.race([promise, timeoutPromise]);
+};
 
+const generateCustomId = async (client) => {
+  const year = new Date().getFullYear();
+  const result = await client.query(
+    `SELECT MAX(SUBSTRING(custom_id FROM 10 FOR 5)::int) AS last_id 
+     FROM quotations 
+     WHERE custom_id LIKE $1`,
+    [`NPQ-${year}-%`]
+  );
+  const lastId = result.rows[0].last_id || 0;
+  const newId = `NPQ-${year}-${String(lastId + 1).padStart(5, '0')}`; // Format: NPQ-YYYY-XXXXX
+  return newId;
+};
+
+async function sendNotificationToManager(message, title = 'Notification') {
+  const client = await pool.connect();
+  try {
+    // Fetch FCM tokens for storekeepers
+    const query = 'SELECT fcm_token FROM Managers WHERE role = $1 AND active = TRUE';
+    const result = await executeWithRetry(async () => {
+      return await withTimeout(client.query(query, ['manager']), 10000); // 10-second timeout
+    });
+    const tokens = result.rows.map((row) => row.fcm_token).filter((token) => token != null);
+
+    console.log(`Sending notifications to managers:`, tokens);
+
+    // Check if tokens array is empty
+    if (tokens.length === 0) {
+      console.warn('No FCM tokens found for managers. Skipping notification.');
+      return;
+    }
+
+    // Prepare the messages for Firebase
+    const messages = tokens.map((token) => ({
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        role: 'manager', // Add role information to the payload
+      },
+      token,
+    }));
+
+    // Send the notifications
+    const response = await admin.messaging().sendEach(messages);
+    console.log('Successfully sent messages:', response);
+    return response;
+  } catch (error) {
+    console.error('Failed to send FCM messages:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Function to send notifications to supervisors
+async function sendNotificationToSupervisor(message, title = 'Notification') {
+  const client = await pool.connect();
+  try {
+    // Fetch FCM tokens for supervisors
+    const query = 'SELECT fcm_token FROM Supervisors WHERE role = $1 AND active = TRUE';
+    const result = await client.query(query, ['supervisor']);
+    const tokens = result.rows.map((row) => row.fcm_token).filter((token) => token != null);
+
+    console.log(`Sending notifications to supervisor:`, tokens);
+
+    // Check if tokens array is empty
+    if (tokens.length === 0) {
+      console.warn('No FCM tokens found for supervisors. Skipping notification.');
+      return;
+    }
+
+    // Prepare the messages for Firebase
+    const messages = tokens.map((token) => ({
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        role: 'supervisor', // Add role information to the payload
+      },
+      token,
+    }));
+
+    // Send the notifications
+    const response = await admin.messaging().sendEach(messages);
+    console.log('Successfully sent messages:', response);
+    return response;
+  } catch (error) {
+    console.error('Failed to send FCM messages:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 router.post('/quotations/supervisor', async (req, res) => {
   const client = await pool.connect();
