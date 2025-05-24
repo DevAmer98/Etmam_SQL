@@ -1,8 +1,8 @@
 import express from 'express';
-import moment from 'moment-timezone'; // Ensure moment-timezone is installed
+import moment from 'moment-timezone';
 import admin from '../../firebase-init.js';
-import pkg from 'pg'; // New
-const { Pool } = pkg; // Destructure Pool
+import pkg from 'pg';
+const { Pool } = pkg;
 
 const router = express.Router();
 
@@ -11,16 +11,17 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
-router.use(express.json()); // Middleware to parse JSON bodies
+router.use(express.json());
 
 // Utility function to retry database operations
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
   } catch (error) {
+    console.error(`Database operation failed (${3 - retries + 1}/3):`, error.message);
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return executeWithRetry(fn, retries - 1, delay * 2);
@@ -39,22 +40,29 @@ const withTimeout = (promise, timeout) => {
 
 // Function to generate custom ID
 const generateCustomId = async (client) => {
-  const year = new Date().getFullYear();
-  const result = await client.query(
-    `SELECT MAX(SUBSTRING(custom_id FROM 10)::int) AS last_id 
-     FROM orders 
-     WHERE custom_id LIKE $1`,
-    [`NPO-${year}-%`]
-  );
-  const lastId = result.rows[0].last_id || 0;
-  const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
-  return newId;
+  try {
+    const year = new Date().getFullYear();
+    const result = await client.query(
+      `SELECT COALESCE(MAX(SUBSTRING(custom_id FROM 10)::int), 0) AS last_id 
+       FROM orders 
+       WHERE custom_id LIKE $1`,
+      [`NPO-${year}-%`]
+    );
+    const lastId = result.rows[0].last_id || 0;
+    const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
+    return newId;
+  } catch (error) {
+    console.error('Error generating custom ID:', error);
+    throw new Error('Failed to generate order ID');
+  }
 };
 
 // Function to send notifications to supervisors
 async function sendNotificationToManager(message, title = 'Notification') {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
+    
     // Fetch FCM tokens for supervisors
     const query = 'SELECT fcm_token FROM Managers WHERE role = $1 AND active = TRUE';
     const result = await client.query(query, ['manager']);
@@ -75,7 +83,7 @@ async function sendNotificationToManager(message, title = 'Notification') {
         body: message,
       },
       data: {
-        role: 'manager', // Add role information to the payload
+        role: 'manager',
       },
       token,
     }));
@@ -86,69 +94,177 @@ async function sendNotificationToManager(message, title = 'Notification') {
     return response;
   } catch (error) {
     console.error('Failed to send FCM messages:', error);
-    throw error;
+    // Don't throw here - notification failure shouldn't fail the whole order creation
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
 // POST endpoint to create an order
 router.post('/orders/supervisor', async (req, res) => {
-  const client = await pool.connect();
+  let client;
+  
   try {
+    // Validate request body first
+    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+
+    // Input validation
+    if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: {
+          client_id: !client_id ? 'Required' : 'Valid',
+          delivery_date: !delivery_date ? 'Required' : 'Valid',
+          delivery_type: !delivery_type ? 'Required' : 'Valid',
+          products: !products || products.length === 0 ? 'Required and must not be empty' : 'Valid'
+        }
+      });
+    }
+
+    // Validate products
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      if (!product.section || !product.type || !product.quantity || !product.price) {
+        return res.status(400).json({ 
+          error: `Product ${i + 1} is missing required fields`,
+          details: {
+            section: product.section ? 'Valid' : 'Required',
+            type: product.type ? 'Valid' : 'Required',
+            quantity: product.quantity ? 'Valid' : 'Required',
+            price: product.price ? 'Valid' : 'Required'
+          }
+        });
+      }
+      
+      // Validate numeric fields
+      if (isNaN(parseFloat(product.quantity)) || isNaN(parseFloat(product.price))) {
+        return res.status(400).json({ 
+          error: `Product ${i + 1} has invalid numeric values`,
+          details: {
+            quantity: isNaN(parseFloat(product.quantity)) ? 'Must be a valid number' : 'Valid',
+            price: isNaN(parseFloat(product.price)) ? 'Must be a valid number' : 'Valid'
+          }
+        });
+      }
+    }
+
     await executeWithRetry(async () => {
-      await client.query('BEGIN');
-      const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+      client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        // Format date
+        let formattedDate;
+        try {
+          formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+        } catch (dateError) {
+          throw new Error('Invalid delivery date format');
+        }
 
-      if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
+        // Generate custom ID
+        const customId = await generateCustomId(client);
 
-      let formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
-
-      // Generate custom ID
-      const customId = await generateCustomId(client);
-
-      const orderResult = await withTimeout(
-        client.query(
-          `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-          [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
-        ),
-        10000 // 10-second timeout
-      );
-      const orderId = orderResult.rows[0].id;
-
-      let totalPrice = 0;
-      for (const product of products) {
-        totalPrice += parseFloat(product.price);
-        await client.query(
-          `INSERT INTO order_products (order_id, section, type, description, quantity, price)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [orderId, product.section, product.type, product.description, product.quantity, parseFloat(product.price)]
+        // Insert order
+        const orderResult = await withTimeout(
+          client.query(
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+          ),
+          10000
         );
+
+        if (!orderResult.rows || orderResult.rows.length === 0) {
+          throw new Error('Failed to create order - no ID returned');
+        }
+
+        const orderId = orderResult.rows[0].id;
+        let totalPrice = 0;
+
+        // Insert products
+        for (const product of products) {
+          const quantity = parseFloat(product.quantity);
+          const price = parseFloat(product.price);
+          const productTotal = quantity * price;
+          totalPrice += productTotal;
+
+          await withTimeout(
+            client.query(
+              `INSERT INTO order_products (order_id, section, type, description, quantity, price)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [orderId, product.section, product.type, product.description || '', quantity, price]
+            ),
+            5000
+          );
+        }
+
+        // Update total price
+        await withTimeout(
+          client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]),
+          5000
+        );
+
+        await client.query('COMMIT');
+
+        // Send notifications (don't let this fail the whole operation)
+        try {
+          await sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
+        } catch (notificationError) {
+          console.error('Notification failed but order was created successfully:', notificationError);
+        }
+
+        return res.status(201).json({ 
+          orderId, 
+          customId, 
+          status: 'success', 
+          totalPrice,
+          message: 'Order created successfully'
+        });
+
+      } catch (transactionError) {
+        console.error('Transaction error:', transactionError);
+        await client.query('ROLLBACK');
+        throw transactionError;
       }
-
-      await client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]);
-      await client.query('COMMIT');
-
-      // Send notifications to supervisors
-      await sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
-
-      return res.status(201).json({ orderId, customId, status: 'success', totalPrice });
     });
+
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Error creating order:', error);
-    return res.status(500).json({ error: error.message || 'Error creating order' });
+    
+    // Provide more specific error messages
+    let errorMessage = 'Error creating order';
+    let statusCode = 500;
+    
+    if (error.message.includes('Invalid delivery date')) {
+      errorMessage = 'Invalid delivery date format';
+      statusCode = 400;
+    } else if (error.message.includes('Failed to generate order ID')) {
+      errorMessage = 'Failed to generate order ID';
+      statusCode = 500;
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Database operation timed out';
+      statusCode = 503;
+    } else if (error.message.includes('Missing required fields')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    }
+
+    return res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      timestamp: new Date().toISOString()
+    });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 
-// GET endpoint to fetch orders
+// GET endpoint to fetch orders (keeping your existing implementation)
 router.get('/orders/supervisor', async (req, res) => {
-  const client = await pool.connect();
+  let client;
   try {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
@@ -194,9 +310,10 @@ router.get('/orders/supervisor', async (req, res) => {
     const countQueryParams = [`%${query}%`, username];
 
     const [ordersResult, countResult] = await executeWithRetry(async () => {
+      client = await pool.connect();
       return await Promise.all([
-        withTimeout(client.query(baseQuery, baseQueryParams), 10000), // 10-second timeout
-        withTimeout(client.query(countQuery, countQueryParams), 10000), // 10-second timeout
+        withTimeout(client.query(baseQuery, baseQueryParams), 10000),
+        withTimeout(client.query(countQuery, countQueryParams), 10000),
       ]);
     });
 
@@ -218,7 +335,9 @@ router.get('/orders/supervisor', async (req, res) => {
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 
