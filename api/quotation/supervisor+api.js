@@ -39,11 +39,36 @@ router.post('/quotations/supervisor', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { client_id, username, supervisor_id, delivery_date, delivery_type, products, notes, condition = 'نقدي - كاش', status = 'not Delivered' } = req.body;
+    const { 
+      client_id, 
+      username, 
+      supervisor_id, 
+      delivery_date, 
+      delivery_type, 
+      products, 
+      notes, 
+      condition = 'نقدي - كاش', 
+      status = 'not Delivered' 
+    } = req.body;
 
     // Validate required fields
     if (!client_id || !username || !supervisor_id || !delivery_date || !delivery_type || !products || products.length === 0) {
       throw new Error('Missing required fields');
+    }
+
+    // Validate products - match frontend validation
+    const invalidProducts = products.filter(
+      product => !product.type || 
+                 !product.section || 
+                 !product.quantity || 
+                 !product.description ||  // Added missing validation
+                 !product.price ||        // Added missing validation
+                 isNaN(parseFloat(product.price)) || 
+                 parseFloat(product.price) <= 0
+    );
+
+    if (invalidProducts.length > 0) {
+      throw new Error('Please fill in all product details with valid prices');
     }
 
     // Format delivery date
@@ -60,23 +85,38 @@ router.post('/quotations/supervisor', async (req, res) => {
     const quotationId = quotationResult.rows[0].id;
 
     let totalPrice = 0, totalVat = 0, totalSubtotal = 0;
+    
     // Insert products
     for (const product of products) {
       const { section, type, description, quantity, price } = product;
-      if (!section || !type || !quantity || !price) {
-        throw new Error('Missing product details or price');
+      
+      // Double-check required fields (redundant but safe)
+      if (!section || !type || !description || !quantity || !price) {
+        throw new Error(`Missing product details for product: ${description || 'unnamed'}`);
       }
+      
       const numericPrice = parseFloat(price);
-      if (isNaN(numericPrice)) { throw new Error('Invalid price format'); }
+      const numericQuantity = parseInt(quantity);
+      
+      if (isNaN(numericPrice) || numericPrice <= 0) { 
+        throw new Error(`Invalid price format for product: ${description}`); 
+      }
+      
+      if (isNaN(numericQuantity) || numericQuantity <= 0) { 
+        throw new Error(`Invalid quantity for product: ${description}`); 
+      }
+      
       const vat = numericPrice * 0.15;
       const subtotal = numericPrice + vat;
-      totalPrice += numericPrice * quantity;
-      totalVat += vat * quantity;
-      totalSubtotal += subtotal * quantity;
+      
+      totalPrice += numericPrice * numericQuantity;
+      totalVat += vat * numericQuantity;
+      totalSubtotal += subtotal * numericQuantity;
+      
       await client.query(
         `INSERT INTO quotation_products (quotation_id, section, type, description, quantity, price, vat, subtotal)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [quotationId, section, type, description, quantity, numericPrice, vat, subtotal]
+        [quotationId, section, type, description, numericQuantity, numericPrice, vat, subtotal]
       );
     }
 
@@ -87,6 +127,8 @@ router.post('/quotations/supervisor', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    
+    // Send notifications
     //await sendNotificationToSupervisor(`تم إنشاء عرض سعر جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار عرض سعر جديد');
     await sendNotificationToManager(`تم إنشاء عرض سعر جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار عرض سعر جديد');
 
