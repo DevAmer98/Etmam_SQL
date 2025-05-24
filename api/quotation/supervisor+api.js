@@ -33,6 +33,84 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+
+
+router.post('/quotations/supervisor', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { client_id, username, supervisor_id, delivery_date, delivery_type, products, notes, condition = 'نقدي - كاش', status = 'not Delivered' } = req.body;
+
+    // Validate required fields
+    if (!client_id || !username || !supervisor_id || !delivery_date || !delivery_type || !products || products.length === 0) {
+      throw new Error('Missing required fields');
+    }
+
+    // Format delivery date
+    const formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+    const customId = await generateCustomId(client); // Generate custom_id without RevX
+
+    // Insert main quotation
+    const insertQuery = `
+      INSERT INTO quotations (client_id, username, supervisor_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id
+    `;
+    const insertParams = [client_id, username, supervisor_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
+    const quotationResult = await client.query(insertQuery, insertParams);
+    const quotationId = quotationResult.rows[0].id;
+
+    let totalPrice = 0, totalVat = 0, totalSubtotal = 0;
+    // Insert products
+    for (const product of products) {
+      const { section, type, description, quantity, price } = product;
+      if (!section || !type || !quantity || !price) {
+        throw new Error('Missing product details or price');
+      }
+      const numericPrice = parseFloat(price);
+      if (isNaN(numericPrice)) { throw new Error('Invalid price format'); }
+      const vat = numericPrice * 0.15;
+      const subtotal = numericPrice + vat;
+      totalPrice += numericPrice * quantity;
+      totalVat += vat * quantity;
+      totalSubtotal += subtotal * quantity;
+      await client.query(
+        `INSERT INTO quotation_products (quotation_id, section, type, description, quantity, price, vat, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [quotationId, section, type, description, quantity, numericPrice, vat, subtotal]
+      );
+    }
+
+    // Update the quotation totals
+    await client.query(
+      `UPDATE quotations SET total_price = $1, total_vat = $2, total_subtotal = $3 WHERE id = $4`,
+      [totalPrice, totalVat, totalSubtotal, quotationId]
+    );
+
+    await client.query('COMMIT');
+    //await sendNotificationToSupervisor(`تم إنشاء عرض سعر جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار عرض سعر جديد');
+    await sendNotificationToManager(`تم إنشاء عرض سعر جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار عرض سعر جديد');
+
+    return res.status(201).json({
+      quotationId,
+      customId,
+      status: 'success',
+      totalPrice,
+      totalVat,
+      totalSubtotal,
+      condition,
+    });
+  } catch (error) {
+    console.error('Transaction Error:', error);
+    await client.query('ROLLBACK');
+    return res.status(500).json({
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
 router.get('/quotations/supervisor', async (req, res) => {
     const client = await pool.connect();
     try {
