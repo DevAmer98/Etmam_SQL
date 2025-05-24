@@ -275,10 +275,58 @@ router.get('/supervisors', async (req, res) => {
 });
 
 
+// GET /salesreps/emails (new endpoint)
+router.get('/supervisors/emails', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { email } = req.query; // Get the email from query parameters
+
+    // Validate email format (optional)
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or missing email', 
+      });
+    }
+
+    const query = 'SELECT * FROM supervisors WHERE email = $1';
+    const result = await executeWithRetry(async () => {
+      return await withTimeout(client.query(query, [email]), 10000); // 10-second timeout
+    });
+
+    if (!result) {
+      console.error('No result from the query.');
+      throw new Error('No result from the query.');
+    }
+
+    const supervisor = result.rows;
+
+    if (supervisor.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Supervisor not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      supervisor: supervisor[0], // Return the first matching sales rep
+    });
+  } catch (error) {
+    console.error('Error fetching supervisor:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch supervisor',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+  } finally {
+    client.release();
+  }});
+
 
 // GET /api/supervisors/email
-router.get('/supervisors/email', async (req, res) => {
-  const { email } = req.query;
+/*router.get('/supervisors/email', async (req, res) => {
+  const { email } = req.query; 
 
   if (!email) {
     return res.status(400).json({ error: 'Missing email' });
@@ -286,7 +334,7 @@ router.get('/supervisors/email', async (req, res) => {
 
   const client = await pool.connect();
   try {
-    const query = 'SELECT id FROM supervisors WHERE email = $1';
+    const query = 'SELECT * FROM supervisors WHERE email = $1';
     const result = await executeWithRetry(async () => {
       return await withTimeout(client.query(query, [email]), 10000); // 10-second timeout
     });
@@ -305,6 +353,6 @@ router.get('/supervisors/email', async (req, res) => {
   } finally {
     client.release();
   }
-});
+});*/
 
 export default router;
