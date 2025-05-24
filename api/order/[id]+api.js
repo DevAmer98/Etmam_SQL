@@ -105,6 +105,7 @@ router.put('/orders/:id', async (req, res) => {
   if (!id) {
     return res.status(400).json({ error: 'Missing order ID' });
   }
+const client = await pool.connect();
 
   try {
     const {
@@ -115,6 +116,7 @@ router.put('/orders/:id', async (req, res) => {
       products,
       status = 'not Delivered',
     } = body;
+  await client.query('BEGIN');
 
     // Fetch the current quotation to get the custom_id
       const getOrderQuery = `SELECT custom_id FROM orders WHERE id = $1`;
@@ -187,7 +189,7 @@ router.put('/orders/:id', async (req, res) => {
 
     await executeWithRetry(async () => {
       return await withTimeout(
-        pool.query(updateOrderQuery, [
+        client.query(updateOrderQuery, [
           client_id,
           delivery_date,
           delivery_type,
@@ -208,7 +210,7 @@ router.put('/orders/:id', async (req, res) => {
     if (products && products.length > 0) {
       const deleteProductsQuery = `DELETE FROM order_products WHERE order_id = $1`;
       await executeWithRetry(async () => {
-        return await withTimeout(pool.query(deleteProductsQuery, [id]), 10000); // 10-second timeout
+        return await withTimeout(client.query(deleteProductsQuery, [id]), 10000); // 10-second timeout
       });
 
       for (const product of products) {
@@ -225,7 +227,7 @@ router.put('/orders/:id', async (req, res) => {
 
         await executeWithRetry(async () => {
           return await withTimeout(
-            pool.query(
+            client.query(
               `INSERT INTO order_products (order_id, section, type, description, quantity,price, vat, subtotal) 
                VALUES ($1, $2, $3, $4, $5, $6,$7,$8)`,
               [id, section, type, description, quantity, price,vat, subtotal]
@@ -235,15 +237,19 @@ router.put('/orders/:id', async (req, res) => {
         });
       }
     }
-
+  await client.query('COMMIT');
     return res.status(200).json({ message: 'Order and products updated successfully' });
   } catch (error) {
+      await client.query('ROLLBACK');
+
     console.error('Database error:', error);
     return res.status(500).json({
       error: 'Internal Server Error',
       details: error.message,
     });
-  }
+  } finally {
+  client.release();
+}
 });
 
 // DELETE /api/orders/:id
