@@ -375,6 +375,7 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
+        clients.username_add AS client_username_add  
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
