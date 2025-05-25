@@ -35,6 +35,8 @@ import deliverdApi from './api/delivered/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
 import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
+import allClientsApi from './api/client/all+api.js'; 
+
 
 
 const app = express();
@@ -76,6 +78,8 @@ app.use('/api', singleDriverApi);
 app.use('/api', singleSalesApi);
 app.use('/api', singleStorekeeperApi);
 app.use('/api', singleSupervisorApi);
+app.use('/api', allClientsApi);
+
 
 
 
