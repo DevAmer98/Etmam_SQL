@@ -38,14 +38,24 @@ const withTimeout = (promise, timeout) => {
 };
 
 // Function to generate custom ID
+// Alternative function using SQL regex - FIXED VERSION
 const generateCustomId = async (client) => {
   const year = new Date().getFullYear();
+  
+  // Use PostgreSQL regex to extract only numeric part
   const result = await client.query(
-    `SELECT MAX(SUBSTRING(custom_id FROM 10)::int) AS last_id 
+    `SELECT MAX(
+       CASE 
+         WHEN SUBSTRING(custom_id FROM 'NPO-${year}-(\\d+)') ~ '^\\d+$' 
+         THEN SUBSTRING(custom_id FROM 'NPO-${year}-(\\d+)')::int
+         ELSE 0
+       END
+     ) AS last_id 
      FROM orders 
-     WHERE custom_id LIKE $1`,
-    [`NPO-${year}-%`]
+     WHERE custom_id ~ $1`,
+    [`^NPO-${year}-\\d+`]
   );
+  
   const lastId = result.rows[0].last_id || 0;
   const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
   return newId;
