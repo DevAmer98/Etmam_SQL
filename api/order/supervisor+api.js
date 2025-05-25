@@ -354,6 +354,16 @@ router.get('/orders/supervisor', async (req, res) => {
 // Fixed GET endpoint to fetch orders for supervisor
 router.get('/orders/supervisor', async (req, res) => {
   let client;
+
+
+  console.log('Sample order with client data:', {
+  id: orders[0]?.id,
+  client_added_by: orders[0]?.client_added_by,
+  rawAddedBy: orders[0]?.rawAddedBy, // If you add this to your SELECT
+  query: baseQuery // Log the actual query being executed
+});
+
+
   try {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
@@ -378,7 +388,8 @@ router.get('/orders/supervisor', async (req, res) => {
         orders.storekeeperaccept,
         orders.actual_delivery_date,
         orders.total_price, 
-        COALESCE(clients.added_by, '') AS client_added_by 
+        clients.added_by AS client_added_by,
+       clients.added_by AS raw_client_added_by 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
