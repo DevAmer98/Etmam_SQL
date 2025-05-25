@@ -111,6 +111,8 @@ router.get('/clients', async (req, res) => {
     const limit = parseInt(req.query.limit || '10', 10); // Default limit is 10
     const page = parseInt(req.query.page || '1', 10); // Default page is 1
     const searchQuery = req.query.search || ''; // Default to empty string for no search
+    const username = req.query.username || '';
+
 
     // Calculate the offset for pagination
     const offset = (page - 1) * limit;
@@ -120,7 +122,8 @@ router.get('/clients', async (req, res) => {
       return await withTimeout(
         sql`
           SELECT * FROM clients
-          WHERE client_name ILIKE ${'%' + searchQuery + '%'}
+          WHERE clients.username = ${username} AND 
+          client_name ILIKE ${'%' + searchQuery + '%'}
           ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
@@ -134,7 +137,8 @@ router.get('/clients', async (req, res) => {
       return await withTimeout(
         sql`
           SELECT COUNT(*) AS count FROM clients
-          WHERE client_name ILIKE ${'%' + searchQuery + '%'};
+          WHERE clients.username = ${username} AND
+           client_name ILIKE ${'%' + searchQuery + '%'};
         `,
         10000 // 10-second timeout
       );
