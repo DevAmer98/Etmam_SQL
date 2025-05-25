@@ -273,6 +273,8 @@ router.post('/orders/supervisor', async (req, res) => {
 });
 
 // GET endpoint to fetch orders (keeping your existing implementation)
+
+/*
 router.get('/orders/supervisor', async (req, res) => {
   let client;
   try {
@@ -326,6 +328,96 @@ router.get('/orders/supervisor', async (req, res) => {
     const orders = ordersResult.rows;
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
+
+    return res.status(200).json({
+      orders,
+      hasMore,
+      totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit),
+    });
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    return res.status(500).json({
+      error: error.message || 'Error fetching orders',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+});
+
+*/
+
+// Fixed GET endpoint to fetch orders for supervisor
+router.get('/orders/supervisor', async (req, res) => {
+  let client;
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const query = req.query.query || '';
+
+    const offset = (page - 1) * limit;
+
+    const baseQuery = `
+      SELECT 
+        orders.*, 
+        clients.client_name AS client_name,
+        clients.username_add AS client_username,
+        clients.phone_number AS client_phone,
+        clients.company_name AS client_company,
+        clients.branch_number AS client_branch,
+        clients.tax_number AS client_tax,
+        clients.latitude AS client_latitude,
+        clients.longitude AS client_longitude,
+        clients.street AS client_street,
+        clients.city AS client_city,
+        clients.region AS client_region, 
+        orders.status,
+        orders.storekeeperaccept,
+        orders.actual_delivery_date,
+        orders.total_price 
+      FROM orders
+      JOIN clients ON orders.client_id = clients.id
+      WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
+      ORDER BY orders.created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM orders
+      JOIN clients ON orders.client_id = clients.id
+      WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
+    `;
+
+    // Fixed: Remove undefined 'username' parameter
+    const baseQueryParams = [limit, offset, `%${query}%`];
+    const countQueryParams = [`%${query}%`];
+
+    const [ordersResult, countResult] = await executeWithRetry(async () => {
+      client = await pool.connect();
+      return await Promise.all([
+        withTimeout(client.query(baseQuery, baseQueryParams), 10000),
+        withTimeout(client.query(countQuery, countQueryParams), 10000) // Fixed: Execute count query
+      ]);
+    });
+
+    const orders = ordersResult.rows;
+    const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
+    const hasMore = page * limit < totalCount;
+
+    // Debug: Log one order to check client_username
+    if (orders.length > 0) {
+      console.log('Sample order data:', {
+        id: orders[0].id,
+        client_name: orders[0].client_name,
+        client_username: orders[0].client_username,
+        client_company: orders[0].client_company
+      });
+    }
 
     return res.status(200).json({
       orders,
