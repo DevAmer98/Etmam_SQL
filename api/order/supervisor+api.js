@@ -414,7 +414,7 @@ router.get('/orders/supervisor', async (req, res) => {
       console.log('Sample order data:', {
         id: orders[0].id,
         client_name: orders[0].client_name,
-        client_username: orders[0].client_username,
+        client_username_add: orders[0].client_username_add, // Changed from client_username
         client_company: orders[0].client_company
       });
     }
