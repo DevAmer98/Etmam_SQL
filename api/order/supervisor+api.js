@@ -116,7 +116,7 @@ router.post('/orders/supervisor', async (req, res) => {
   
   try {
     // Validate request body first
-    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+    const { client_id, added_by, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
 
     // Input validation
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -178,9 +178,9 @@ router.post('/orders/supervisor', async (req, res) => {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
+            `INSERT INTO orders (client_id, added_by, delivery_date, delivery_type, notes, status, custom_id)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+            [client_id, added_by, formattedDate, delivery_type, notes || null, status, customId]
           ),
           10000
         );
