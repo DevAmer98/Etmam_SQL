@@ -116,7 +116,7 @@ router.post('/orders/supervisor', async (req, res) => {
   
   try {
     // Validate request body first
-    const { client_id, added_by, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
 
     // Input validation
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -178,9 +178,9 @@ router.post('/orders/supervisor', async (req, res) => {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, added_by, delivery_date, delivery_type, notes, status, custom_id)
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [client_id, added_by, formattedDate, delivery_type, notes || null, status, customId]
+            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
           ),
           10000
         );
@@ -388,8 +388,7 @@ router.get('/orders/supervisor', async (req, res) => {
         orders.storekeeperaccept,
         orders.actual_delivery_date,
         orders.total_price, 
-        clients.added_by AS client_added_by,
-       clients.added_by AS raw_client_added_by 
+        COALESCE(clients.added_by, '') AS client_added_by 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
