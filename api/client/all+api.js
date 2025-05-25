@@ -103,7 +103,7 @@ router.post('/clients', async (req, res) => {
 });
 
 // GET /api/clients
-router.get('/clients', async (req, res) => {
+router.get('/allClients', async (req, res) => {
   try {
     const sql = neon(`${process.env.DATABASE_URL}`);
 
