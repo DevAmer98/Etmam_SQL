@@ -279,7 +279,6 @@ router.get('/orders/supervisor', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
     const query = req.query.query || '';
-    const username = req.query.username || '';
 
     const offset = (page - 1) * limit;
 
@@ -303,8 +302,7 @@ router.get('/orders/supervisor', async (req, res) => {
         orders.total_price 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE orders.username = $4 AND 
-            (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
+      WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
       ORDER BY orders.created_at DESC
       LIMIT $1 OFFSET $2
     `;
@@ -313,18 +311,15 @@ router.get('/orders/supervisor', async (req, res) => {
       SELECT COUNT(*) AS total
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE orders.username = $2 AND 
-            (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
+      WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
     const baseQueryParams = [limit, offset, `%${query}%`, username];
-    const countQueryParams = [`%${query}%`, username];
 
     const [ordersResult, countResult] = await executeWithRetry(async () => {
       client = await pool.connect();
       return await Promise.all([
         withTimeout(client.query(baseQuery, baseQueryParams), 10000),
-        withTimeout(client.query(countQuery, countQueryParams), 10000),
       ]);
     });
 
