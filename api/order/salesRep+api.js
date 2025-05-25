@@ -209,7 +209,7 @@ router.get('/orders/salesRep', async (req, res) => {
         orders.total_price 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE orders.username = $4 AND 
+      WHERE clients.username = $4 AND 
             (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
       ORDER BY orders.created_at DESC
       LIMIT $1 OFFSET $2
@@ -219,7 +219,7 @@ router.get('/orders/salesRep', async (req, res) => {
       SELECT COUNT(*) AS total
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE orders.username = $2 AND 
+      WHERE clients.username = $2 AND 
             (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
