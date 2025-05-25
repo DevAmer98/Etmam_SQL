@@ -244,7 +244,7 @@ router.get('/quotations/salesRep', async (req, res) => {
         quotations.total_subtotal
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
-      WHERE quotations.username = $4 AND 
+      WHERE clients.username = $4 AND 
             (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
 ORDER BY quotations.created_at DESC
       LIMIT $1 OFFSET $2
@@ -254,7 +254,7 @@ ORDER BY quotations.created_at DESC
       SELECT COUNT(*) AS total
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
-      WHERE quotations.username = $2 AND 
+      WHERE clients.username = $2 AND 
             (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
