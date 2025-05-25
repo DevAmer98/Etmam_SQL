@@ -30,6 +30,7 @@ router.post('/clients', async (req, res) => {
     const sql = neon(`${process.env.DATABASE_URL}`);
     const {
       company_name,
+      username,
       client_name,
       client_type,
       phone_number,
@@ -62,20 +63,22 @@ router.post('/clients', async (req, res) => {
       return await withTimeout(
         sql`
           INSERT INTO clients (
-            company_name, 
+            company_name,
+            username, 
             client_name,
             client_type,
             phone_number, 
             tax_number,
             branch_number,
-            latitude, 
+            latitude,  
             longitude,
             street,
             city,
             region
           ) 
           VALUES (
-            ${company_name}, 
+            ${company_name},
+            ${username},
             ${client_name},
             ${client_type},
             ${phone_number},

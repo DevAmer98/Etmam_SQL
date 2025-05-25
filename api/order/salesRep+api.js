@@ -96,7 +96,7 @@ async function sendNotificationToSupervisor(message, title = 'Notification') {
 router.post('/orders/salesRep', async (req, res) => {
   const client = await pool.connect();
   try {
-    await executeWithRetry(async () => {
+    await executeWithRetry(async () => { 
       await client.query('BEGIN');
       const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
 
