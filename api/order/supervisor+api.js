@@ -365,7 +365,7 @@ router.get('/orders/supervisor', async (req, res) => {
       SELECT 
         orders.*, 
         clients.client_name AS client_name,
-        clients.username_add AS client_username,
+        clients.username_add AS client_username_add,,
         clients.phone_number AS client_phone,
         clients.company_name AS client_company,
         clients.branch_number AS client_branch,
