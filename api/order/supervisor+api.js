@@ -378,7 +378,7 @@ router.get('/orders/supervisor', async (req, res) => {
         orders.storekeeperaccept,
         orders.actual_delivery_date,
         orders.total_price, 
-        clients.added_by AS client_added_by  
+        COALESCE(clients.added_by, '') AS client_added_by 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
