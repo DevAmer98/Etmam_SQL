@@ -374,7 +374,7 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
-        clients.username_add AS client_username_added,  
+        clients.added_by AS client_added_by,  
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
@@ -409,15 +409,7 @@ router.get('/orders/supervisor', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
-    // Debug: Log one order to check client_username
-    if (orders.length > 0) {
-      console.log('Sample order data:', {
-        id: orders[0].id,
-        client_name: orders[0].client_name,
-        client_username_add: orders[0].client_username_add, // Changed from client_username
-        client_company: orders[0].client_company
-      });
-    }
+  
 
     return res.status(200).json({
       orders,
