@@ -177,7 +177,7 @@ router.post('/orders/salesRep', async (req, res) => {
     client.release();
   }
 });
-
+ 
 // GET endpoint to fetch orders
 router.get('/orders/salesRep', async (req, res) => {
   const client = await pool.connect();
@@ -190,10 +190,9 @@ router.get('/orders/salesRep', async (req, res) => {
     const offset = (page - 1) * limit;
 
     const baseQuery = `
-      SELECT 
+      SELECT  
         orders.*, 
         clients.client_name AS client_name,
-        clients.username AS username,
         clients.phone_number AS client_phone,
         clients.company_name AS client_company,
         clients.branch_number AS client_branch,
@@ -209,7 +208,7 @@ router.get('/orders/salesRep', async (req, res) => {
         orders.total_price 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE clients.username = $4 AND 
+      WHERE orders.username = $4 AND 
             (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
       ORDER BY orders.created_at DESC
       LIMIT $1 OFFSET $2
@@ -219,7 +218,7 @@ router.get('/orders/salesRep', async (req, res) => {
       SELECT COUNT(*) AS total
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE clients.username = $2 AND 
+      WHERE orders.username = $2 AND 
             (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
