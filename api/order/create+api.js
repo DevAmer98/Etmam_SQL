@@ -37,17 +37,37 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
 // Function to generate custom ID
 const generateCustomId = async (client) => {
   const year = new Date().getFullYear();
+  
+  // Get all custom IDs for the current year and extract numeric parts
   const result = await client.query(
-    `SELECT MAX(SUBSTRING(custom_id FROM 10)::int) AS last_id 
+    `SELECT custom_id 
      FROM orders 
-     WHERE custom_id LIKE $1`,
+     WHERE custom_id LIKE $1
+     ORDER BY custom_id DESC`,
     [`NPO-${year}-%`]
   );
-  const lastId = result.rows[0].last_id || 0;
-  const newId = `NPO-${year}-${String(lastId + 1).padStart(5, '0')}`;
+  
+  let maxId = 0;
+  
+  // Parse each custom_id to find the highest numeric ID
+  for (const row of result.rows) {
+    const customId = row.custom_id;
+    // Extract the part after "NPO-YYYY-"
+    const idPart = customId.substring(`NPO-${year}-`.length);
+    
+    // Extract only the numeric part (ignore any non-numeric suffixes like "Rev1")
+    const numericMatch = idPart.match(/^(\d+)/);
+    if (numericMatch) {
+      const numericId = parseInt(numericMatch[1], 10);
+      if (numericId > maxId) {
+        maxId = numericId;
+      }
+    }
+  }
+  
+  const newId = `NPO-${year}-${String(maxId + 1).padStart(5, '0')}`;
   return newId;
 };
-
 // POST endpoint to create an order
 router.post('/orders', async (req, res) => {
   let client;
