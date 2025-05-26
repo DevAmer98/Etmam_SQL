@@ -147,7 +147,7 @@ async function sendWelcomeEmail(email, name, temporaryPassword, role) {
   }
 }
 
-router.post('/accountatns', async (req, res) => {
+router.post('/accountants', async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, email, phone, clerkId, role = 'accountant', fcmToken = null } = req.body;
