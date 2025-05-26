@@ -108,7 +108,7 @@ router.post('/orders/salesRep', async (req, res) => {
   let transactionStarted = false;
   
   try {
-    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [], status = 'not Delivered' } = req.body;
 
     // Validate required fields first
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -143,6 +143,18 @@ router.post('/orders/salesRep', async (req, res) => {
         [orderId, product.section, product.type, product.description, product.quantity, parseFloat(product.price)]
       );
     }
+
+
+    for (const location of deliveryLocations) {
+  if (location.name && location.url) {
+    await client.query(
+      `INSERT INTO order_locations (order_id, name, url)
+       VALUES ($1, $2, $3)`,
+      [orderId, location.name, location.url]
+    );
+  }
+}
+
 
     await client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]);
     
