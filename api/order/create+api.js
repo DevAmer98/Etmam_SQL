@@ -270,7 +270,7 @@ try {
 
         // Send notifications (don't let this fail the whole operation)
         try {
-          await sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
+          await sendNotificationToSupervisor(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
         } catch (notificationError) {
           console.error('Notification failed but order was created successfully:', notificationError);
         }
