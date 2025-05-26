@@ -252,6 +252,32 @@ const client = await pool.connect();
         });
       }
     }
+
+    if (body.deliveryLocations && Array.isArray(body.deliveryLocations)) {
+  // Delete existing locations
+  await executeWithRetry(async () => {
+    return await withTimeout(
+      client.query(`DELETE FROM order_locations WHERE order_id = $1`, [id]),
+      10000
+    );
+  });
+
+  // Re-insert updated delivery locations
+  for (const loc of body.deliveryLocations) {
+    const { name, url } = loc;
+    if (name && url) {
+      await executeWithRetry(async () => {
+        return await withTimeout(
+          client.query(
+            `INSERT INTO order_locations (order_id, name, url) VALUES ($1, $2, $3)`,
+            [id, name, url]
+          ),
+          10000
+        );
+      });
+    }
+  }
+}
   await client.query('COMMIT');
     return res.status(200).json({ message: 'Order and products updated successfully' });
   } catch (error) {
