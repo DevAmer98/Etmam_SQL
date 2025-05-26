@@ -50,6 +50,8 @@ const generateCustomId = async (client) => {
 // POST endpoint to create an order
 router.post('/orders', async (req, res) => {
   let client;
+
+  
   
   try {
     // Validate request body first
@@ -102,11 +104,58 @@ router.post('/orders', async (req, res) => {
         
         // Format date
         let formattedDate;
-        try {
-          formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
-        } catch (dateError) {
-          throw new Error('Invalid delivery date format');
-        }
+try {
+  console.log('Received delivery_date:', delivery_date, typeof delivery_date);
+  
+  let parsedDate;
+  
+  // Handle different input formats
+  if (!delivery_date) {
+    throw new Error('Delivery date is required');
+  }
+  
+  if (typeof delivery_date === 'string') {
+    // Case 1: ISO string (2024-05-26T14:30:00.000Z)
+    if (delivery_date.includes('T') && delivery_date.includes('Z')) {
+      parsedDate = moment(delivery_date);
+    }
+    // Case 2: Custom format (2024-05-26 14:30)
+    else if (delivery_date.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)) {
+      parsedDate = moment(`${delivery_date}:00`, 'YYYY-MM-DD HH:mm:ss');
+    }
+    // Case 3: Date only (2024-05-26)
+    else if (delivery_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      parsedDate = moment(delivery_date, 'YYYY-MM-DD');
+    }
+    // Case 4: Try to parse as-is
+    else {
+      parsedDate = moment(delivery_date);
+    }
+  } 
+  // Handle Date objects or timestamps
+  else {
+    parsedDate = moment(delivery_date);
+  }
+  
+  console.log('Parsed date object:', parsedDate);
+  console.log('Is valid:', parsedDate.isValid());
+  
+  if (!parsedDate.isValid()) {
+    throw new Error(`Unable to parse date: ${delivery_date}`);
+  }
+  
+  // Convert to UTC and format for database
+  formattedDate = parsedDate.utc().format('YYYY-MM-DD HH:mm:ss');
+  console.log('Formatted date for database:', formattedDate);
+  
+} catch (dateError) {
+  console.error('Date parsing error:', {
+    error: dateError.message,
+    receivedDate: delivery_date,
+    dateType: typeof delivery_date
+  });
+  throw new Error(`Invalid delivery date format: ${dateError.message}`);
+}
 
         // Generate custom ID
         const customId = await generateCustomId(client);
