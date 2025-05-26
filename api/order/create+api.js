@@ -94,7 +94,6 @@ router.post('/orders', async (req, res) => {
         });
       }
     }
-
     await executeWithRetry(async () => {
       client = await pool.connect();
       
@@ -175,8 +174,7 @@ router.post('/orders', async (req, res) => {
         throw transactionError;
       }
     });
-
-  } catch (error) {
+ } catch (error) {
     console.error('Error creating order:', error);
     
     // Provide more specific error messages
