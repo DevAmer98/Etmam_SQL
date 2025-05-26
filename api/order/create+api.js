@@ -49,93 +49,163 @@ const generateCustomId = async (client) => {
 
 // POST endpoint to create an order
 router.post('/orders', async (req, res) => {
-  const client = await pool.connect();
+  let client;
+  
   try {
+    // Validate request body first
+    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+
+    // Input validation
+    if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: {
+          client_id: !client_id ? 'Required' : 'Valid',
+          delivery_date: !delivery_date ? 'Required' : 'Valid',
+          delivery_type: !delivery_type ? 'Required' : 'Valid',
+          products: !products || products.length === 0 ? 'Required and must not be empty' : 'Valid'
+        }
+      });
+    }
+
+    // Validate products
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      if (!product.section || !product.type || !product.quantity || !product.price) {
+        return res.status(400).json({ 
+          error: `Product ${i + 1} is missing required fields`,
+          details: {
+            section: product.section ? 'Valid' : 'Required',
+            type: product.type ? 'Valid' : 'Required',
+            quantity: product.quantity ? 'Valid' : 'Required',
+            price: product.price ? 'Valid' : 'Required'
+          }
+        });
+      }
+      
+      // Validate numeric fields
+      if (isNaN(parseFloat(product.quantity)) || isNaN(parseFloat(product.price))) {
+        return res.status(400).json({ 
+          error: `Product ${i + 1} has invalid numeric values`,
+          details: {
+            quantity: isNaN(parseFloat(product.quantity)) ? 'Must be a valid number' : 'Valid',
+            price: isNaN(parseFloat(product.price)) ? 'Must be a valid number' : 'Valid'
+          }
+        });
+      }
+    }
+
     await executeWithRetry(async () => {
-      await client.query('BEGIN');
-      const {
-        client_id,
-        username,
-        delivery_date,
-        delivery_type,
-        products,
-        notes,
-        status = 'not Delivered',
-        supervisoraccept = 'pending',
-        storekeeperaccept = 'pending',
-        manageraccept = 'pending',
-      } = req.body;
-
-      if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      let formattedDate = delivery_date;
-      if (typeof delivery_date === 'string') {
-        const date = new Date(delivery_date);
-        formattedDate = date.toISOString().slice(0, 19).replace('T', ' ');
-      }
-
-      // Generate custom ID
-      const customId = await generateCustomId(client);
-
-      const orderPromise = client.query(
-        `INSERT INTO orders (client_id, delivery_date, delivery_type, notes, status, storekeeperaccept, supervisoraccept, manageraccept, actual_delivery_date, total_price, custom_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-        [
-          client_id,
-          formattedDate,
-          delivery_type,
-          notes || null,
-          status,
-          storekeeperaccept,
-          supervisoraccept,
-          manageraccept,
-          null,
-          0,
-          customId,
-        ]
-      );
-
-      const orderResult = await withTimeout(orderPromise, 10000);
-      const orderId = orderResult.rows[0].id;
-
-      let totalPrice = 0;
-
-      for (const product of products) {
-        const { section, type, description, quantity, price } = product;
-
-        if (!section || !type || !quantity || !price) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'Missing product details or price' });
+      client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        // Format date
+        let formattedDate;
+        try {
+          formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+        } catch (dateError) {
+          throw new Error('Invalid delivery date format');
         }
 
-        const numericPrice = parseFloat(price);
+        // Generate custom ID
+        const customId = await generateCustomId(client);
 
-        if (isNaN(numericPrice)) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'Invalid price format' });
-        }
-
-        totalPrice += numericPrice;
-
-        await client.query(
-          `INSERT INTO order_products (order_id, section, type, description, quantity, price) 
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [orderId, section, type, description, quantity, numericPrice]
+        // Insert order
+        const orderResult = await withTimeout(
+          client.query(
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+          ),
+          10000
         );
-      }
 
-      await client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]);
-      await client.query('COMMIT');
-      return res.status(201).json({ orderId, customId, status: 'success', totalPrice });
+        if (!orderResult.rows || orderResult.rows.length === 0) {
+          throw new Error('Failed to create order - no ID returned');
+        }
+
+        const orderId = orderResult.rows[0].id;
+        let totalPrice = 0;
+
+        // Insert products
+        for (const product of products) {
+          const quantity = parseFloat(product.quantity);
+          const price = parseFloat(product.price);
+          const productTotal = quantity * price;
+          totalPrice += productTotal;
+
+          await withTimeout(
+            client.query(
+              `INSERT INTO order_products (order_id, section, type, description, quantity, price)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [orderId, product.section, product.type, product.description || '', quantity, price]
+            ),
+            5000
+          );
+        }
+
+        // Update total price
+        await withTimeout(
+          client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]),
+          5000
+        );
+
+        await client.query('COMMIT');
+
+        // Send notifications (don't let this fail the whole operation)
+        try {
+          await sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
+        } catch (notificationError) {
+          console.error('Notification failed but order was created successfully:', notificationError);
+        }
+
+        return res.status(201).json({ 
+          orderId, 
+          customId, 
+          status: 'success', 
+          totalPrice,
+          message: 'Order created successfully'
+        });
+
+      } catch (transactionError) {
+        console.error('Transaction error:', transactionError);
+        await client.query('ROLLBACK');
+        throw transactionError;
+      }
     });
+
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Error creating order:', error);
-    return res.status(500).json({ error: error.message || 'Error creating order' });
+    
+    // Provide more specific error messages
+    let errorMessage = 'Error creating order';
+    let statusCode = 500;
+    
+    if (error.message.includes('Invalid delivery date')) {
+      errorMessage = 'Invalid delivery date format';
+      statusCode = 400;
+    } else if (error.message.includes('Failed to generate order ID')) {
+      errorMessage = 'Failed to generate order ID';
+      statusCode = 500;
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Database operation timed out';
+      statusCode = 503;
+    } else if (error.message.includes('Missing required fields')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    }
+
+    return res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      timestamp: new Date().toISOString()
+    });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 
@@ -244,7 +314,7 @@ router.get('/orders/supervisor', async (req, res) => {
     if (hasStatus) {
       filterCondition = `(orders.status = $2 OR orders.supervisoraccept = $2)`;
     }
-
+ 
     // COUNT query
     const countParams = hasStatus ? [query, status] : [query];
     const countQuery = `
