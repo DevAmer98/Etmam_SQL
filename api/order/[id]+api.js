@@ -66,25 +66,40 @@ router.get('/orders/:id', async (req, res) => {
       WHERE o.id = $1
     `;
 
-    const orderResult = await executeWithRetry(async () => {
-      return await withTimeout(pool.query(orderQuery, [id]), 10000); // 10-second timeout
-    });
+
+     const [orderResult, productsResult, locationsResult] = await Promise.all([
+      executeWithRetry(() => withTimeout(pool.query(orderQuery, [id]), 10000)),
+      executeWithRetry(() => withTimeout(pool.query(`
+        SELECT * FROM order_products WHERE order_id = $1
+      `, [id]), 10000)),
+      executeWithRetry(() => withTimeout(pool.query(`
+        SELECT name, url FROM order_locations WHERE order_id = $1
+      `, [id]), 10000)),
+    ]);
+
+    //const orderResult = await executeWithRetry(async () => {
+      //return await withTimeout(pool.query(orderQuery, [id]), 10000); // 10-second timeout
+    //});
 
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    const productsQuery = `
+    /*const productsQuery = `
       SELECT * FROM order_products
       WHERE order_id = $1
     `;
-    const productsResult = await executeWithRetry(async () => {
-      return await withTimeout(pool.query(productsQuery, [id]), 10000); // 10-second timeout
-    });
+    */
+    ///const productsResult = await executeWithRetry(async () => {
+      ///return await withTimeout(pool.query(productsQuery, [id]), 10000); // 10-second timeout
+    ///});
+
+    
 
     const orderData = {
       ...orderResult.rows[0],
       products: productsResult.rows,
+      deliveryLocations: locationsResult.rows, 
     };
 
     return res.status(200).json(orderData);
