@@ -132,7 +132,7 @@ router.post('/quotations', async (req, res) => {
     const insertQuery = `
         INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`;
-        const insertParams = [client_id, username, supervisor_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
+        const insertParams = [client_id, username, manager_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 
