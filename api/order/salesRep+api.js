@@ -248,6 +248,33 @@ router.get('/orders/salesRep', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
+
+    const orderIds = orders.map(order => order.id);
+
+let locationMap = {};
+if (orderIds.length > 0) {
+  const locationQuery = `
+    SELECT order_id, name, url
+    FROM order_locations
+    WHERE order_id = ANY($1)
+  `;
+  const locationResult = await client.query(locationQuery, [orderIds]);
+
+  // Group locations by order_id
+  locationResult.rows.forEach(loc => {
+    if (!locationMap[loc.order_id]) {
+      locationMap[loc.order_id] = [];
+    }
+    locationMap[loc.order_id].push({ name: loc.name, url: loc.url });
+  });
+}
+
+// Attach locations to each order
+orders.forEach(order => {
+  order.deliveryLocations = locationMap[order.id] || [];
+});
+
+
     return res.status(200).json({
       orders,
       hasMore,
