@@ -35,17 +35,17 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Function to generate custom ID
+
 const generateCustomId = async (client) => {
   const year = new Date().getFullYear();
   const result = await client.query(
-    `SELECT MAX(SUBSTRING(custom_id FROM 10)::int) AS last_id 
+    `SELECT MAX(SUBSTRING(custom_id FROM 10 FOR 5)::int) AS last_id 
      FROM quotations 
      WHERE custom_id LIKE $1`,
     [`NPQ-${year}-%`]
   );
   const lastId = result.rows[0].last_id || 0;
-  const newId = `NPQ-${year}-${String(lastId + 1).padStart(5, '0')}`;
+  const newId = `NPQ-${year}-${String(lastId + 1).padStart(5, '0')}`; // Format: NPQ-YYYY-XXXXX
   return newId;
 };
 
