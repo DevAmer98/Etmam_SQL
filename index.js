@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import managerApi from './api/manager/manager+api.js';
 import singleManagerApi from './api/manager/[id]+api.js';
+import accountantApi from './api/accountant/accountant+api.js';
+import singleAccountantApi from './api/accountant/[id]+api.js';
 import supervisorApi from './api/supervisor/supervisor+api.js';
 import singleSupervisorApi from './api/supervisor/[id]+api.js';
 import storekeeperApi from './api/storekeeper/storekeeper+api.js';
@@ -47,6 +49,7 @@ app.use(express.json());
 
 // Mount the API routes under /api
 app.use('/api', managerApi);
+app.use('/api', accountantApi);
 app.use('/api', supervisorApi);
 app.use('/api', storekeeperApi);
 app.use('/api', salesApi);
@@ -72,6 +75,7 @@ app.use('/api', acceptedManagerQoutationApi);
 app.use('/api', deliverdApi);
 app.use('/api', singleQuotationApi);
 app.use('/api', singleManagerApi);
+app.use('/api', singleAccountantApi);
 app.use('/api', singleOrderApi);
 app.use('/api', singleClientApi);
 app.use('/api', singleDriverApi);
