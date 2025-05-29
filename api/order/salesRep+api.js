@@ -106,9 +106,9 @@ async function sendNotificationToSupervisor(message, title = 'Notification') {
 router.post('/orders/salesRep', async (req, res) => {
   const client = await pool.connect();
   let transactionStarted = false;
-  
+   
   try {
-    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [], status = 'not Delivered' } = req.body;
+    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal, status = 'not Delivered' } = req.body;
 
     // Validate required fields first
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -126,9 +126,9 @@ router.post('/orders/salesRep', async (req, res) => {
 
     const orderResult = await withTimeout(
       client.query(
-        `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+        `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [client_id, username, formattedDate, delivery_type, notes || null, status,total_vat, total_subtotal, customId]
       ),
       10000 // 10-second timeout
     );
@@ -138,9 +138,9 @@ router.post('/orders/salesRep', async (req, res) => {
     for (const product of products) {
       totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
       await client.query(
-        `INSERT INTO order_products (order_id, section, type, description, quantity, price)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orderId, product.section, product.type, product.description, product.quantity, parseFloat(product.price)]
+        `INSERT INTO order_products (order_id, section, type, description, quantity, price, vat, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [orderId, product.section, product.type, product.description, product.quantity, ,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
       );
     }
 
@@ -217,7 +217,9 @@ router.get('/orders/salesRep', async (req, res) => {
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
-        orders.total_price 
+        orders.total_price,
+        orders.total_vat, 
+        orders.total_subtotal 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE clients.username = $4 AND 
