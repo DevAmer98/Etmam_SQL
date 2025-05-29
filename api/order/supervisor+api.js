@@ -116,7 +116,7 @@ router.post('/orders/supervisor', async (req, res) => {
   
   try {
     // Validate request body first
-    const { client_id, username, delivery_date, delivery_type, products, notes, status = 'not Delivered' } = req.body;
+    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal,status = 'not Delivered' } = req.body;
 
     // Input validation
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -178,9 +178,9 @@ router.post('/orders/supervisor', async (req, res) => {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null, total_vat, total_subtotal, status, customId]
           ),
           10000
         );
@@ -201,9 +201,9 @@ router.post('/orders/supervisor', async (req, res) => {
 
           await withTimeout(
             client.query(
-              `INSERT INTO order_products (order_id, section, type, description, quantity, price)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [orderId, product.section, product.type, product.description || '', quantity, price]
+              `INSERT INTO order_products (order_id, section, type, description, quantity, price, vat, subtotal)
+               VALUES ($1, $2, $3, $4, $5, $6.$7,$8)`,
+              [orderId, product.section, product.type, product.description || '', quantity, price, vat, subtotal]
             ),
             5000
           );

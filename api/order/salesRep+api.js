@@ -109,7 +109,7 @@ router.post('/orders/salesRep', async (req, res) => {
    
   try {
     const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal, status = 'not Delivered' } = req.body;
-
+ 
     // Validate required fields first
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' });
