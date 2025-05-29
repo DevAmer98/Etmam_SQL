@@ -194,20 +194,31 @@ router.post('/orders/supervisor', async (req, res) => {
 
         // Insert products
         for (const product of products) {
-          const quantity = parseFloat(product.quantity);
+          /*const quantity = parseFloat(product.quantity);
           const price = parseFloat(product.price);
           const productTotal = quantity * price;
-          totalPrice += productTotal;
-
+          totalPrice += productTotal;*/
+          totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
           await withTimeout(
             client.query(
               `INSERT INTO order_products (order_id, section, type, description, quantity, price, vat, subtotal)
                VALUES ($1, $2, $3, $4, $5, $6.$7,$8)`,
-              [orderId, product.section, product.type, product.description || '', quantity, price, vat, subtotal]
+        [orderId, product.section, product.type, product.description, product.quantity,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
             ),
             5000
           );
         }
+
+        
+    for (const location of deliveryLocations) {
+  if (location.name && location.url) {
+    await client.query(
+      `INSERT INTO order_locations (order_id, name, url)
+       VALUES ($1, $2, $3)`,
+      [orderId, location.name, location.url]
+    );
+  }
+}
 
         // Update total price
         await withTimeout(
