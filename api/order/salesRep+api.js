@@ -129,10 +129,14 @@ router.post('/orders/salesRep', async (req, res) => {
         `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [client_id, username, formattedDate, delivery_type, notes || null, status,total_vat, total_subtotal, customId]
+        
       ),
       10000 // 10-second timeout
+      
     );
     const orderId = orderResult.rows[0].id;
+    console.log('Inserted order ID:', orderResult.rows[0].id);
+
 
     let totalPrice = 0;
     for (const product of products) {
