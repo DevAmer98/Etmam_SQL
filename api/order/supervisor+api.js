@@ -129,34 +129,9 @@ router.post('/orders/supervisor', async (req, res) => {
           products: !products || products.length === 0 ? 'Required and must not be empty' : 'Valid'
         }
       });
-    }
+    } 
 
-    // Validate products
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      if (!product.section || !product.type || !product.quantity || !product.price) {
-        return res.status(400).json({ 
-          error: `Product ${i + 1} is missing required fields`,
-          details: {
-            section: product.section ? 'Valid' : 'Required',
-            type: product.type ? 'Valid' : 'Required',
-            quantity: product.quantity ? 'Valid' : 'Required',
-            price: product.price ? 'Valid' : 'Required'
-          }
-        });
-      }
-      
-      // Validate numeric fields
-      if (isNaN(parseFloat(product.quantity)) || isNaN(parseFloat(product.price))) {
-        return res.status(400).json({ 
-          error: `Product ${i + 1} has invalid numeric values`,
-          details: {
-            quantity: isNaN(parseFloat(product.quantity)) ? 'Must be a valid number' : 'Valid',
-            price: isNaN(parseFloat(product.price)) ? 'Must be a valid number' : 'Valid'
-          }
-        });
-      }
-    }
+
 
     await executeWithRetry(async () => {
       client = await pool.connect();
@@ -194,10 +169,6 @@ router.post('/orders/supervisor', async (req, res) => {
 
         // Insert products
         for (const product of products) {
-          /*const quantity = parseFloat(product.quantity);
-          const price = parseFloat(product.price);
-          const productTotal = quantity * price;
-          totalPrice += productTotal;*/
           totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
           await withTimeout(
             client.query(
