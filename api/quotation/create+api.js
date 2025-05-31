@@ -140,10 +140,10 @@ router.post('/quotations', async (req, res) => {
     
     // Insert products
     for (const product of products) {
-      const { section, type, description, quantity, price } = product;
+      const { description, quantity, price } = product;
       
       // Double-check required fields (redundant but safe)
-      if (!section || !type || !description || !quantity || !price) {
+      if (!description || !quantity || !price) {
         throw new Error(`Missing product details for product: ${description || 'unnamed'}`);
       }
       
@@ -166,9 +166,9 @@ router.post('/quotations', async (req, res) => {
       totalSubtotal += subtotal * numericQuantity;
       
       await client.query(
-        `INSERT INTO quotation_products (quotation_id, section, type, description, quantity, price, vat, subtotal)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [quotationId, section, type, description, numericQuantity, numericPrice, vat, subtotal]
+        `INSERT INTO quotation_products (quotation_id, description, quantity, price, vat, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [quotationId, description, numericQuantity, numericPrice, vat, subtotal]
       );
     }
 
