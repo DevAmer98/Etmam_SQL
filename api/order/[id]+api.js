@@ -243,9 +243,9 @@ const client = await pool.connect();
         await executeWithRetry(async () => {
           return await withTimeout(
             client.query(
-              `INSERT INTO order_products (order_id, section, type, description, quantity,price, vat, subtotal) 
-               VALUES ($1, $2, $3, $4, $5, $6,$7,$8)`,
-              [id, section, type, description, quantity, price,vat, subtotal]
+              `INSERT INTO order_products (order_id, description, quantity,price, vat, subtotal) 
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [id,description, quantity, price,vat, subtotal]
             ),
             10000 // 10-second timeout
           );
