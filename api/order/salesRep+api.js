@@ -142,9 +142,9 @@ router.post('/orders/salesRep', async (req, res) => {
     for (const product of products) {
       totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
       await client.query(
-        `INSERT INTO order_products (order_id, name, quantity, price, vat, subtotal)
+        `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orderId, product.name, product.quantity,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
+        [orderId, product.description, product.quantity,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
       );
     }
 
