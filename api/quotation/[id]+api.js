@@ -248,9 +248,9 @@ router.put('/quotations/:id', async (req, res) => {
           await executeWithRetry(async () => {
             return await withTimeout(
               client.query(
-                `INSERT INTO quotation_products (quotation_id, section, type, description, quantity, price, vat, subtotal) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [id, section, type, description, quantity, price, vat, subtotal]
+                `INSERT INTO quotation_products (quotation_id, description, quantity, price, vat, subtotal) 
+                 VALUES ($1, $2, $3, $4, $5, $6`,
+                [id,description, quantity, price, vat, subtotal]
               ),
               10000 // 10-second timeout
             );
