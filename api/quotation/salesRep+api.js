@@ -160,8 +160,8 @@ router.post('/quotations/salesRep', async (req, res) => {
     let totalPrice = 0, totalVat = 0, totalSubtotal = 0;
     // Insert products
     for (const product of products) {
-      const { section, type, description, quantity, price } = product;
-      if (!section || !type || !quantity || !price) {
+      const { description, quantity, price } = product;
+      if (!quantity || !price) {
         throw new Error('Missing product details or price');
       }
       const numericPrice = parseFloat(price);
@@ -172,9 +172,9 @@ router.post('/quotations/salesRep', async (req, res) => {
       totalVat += vat * quantity;
       totalSubtotal += subtotal * quantity;
       await client.query(
-        `INSERT INTO quotation_products (quotation_id, section, type, description, quantity, price, vat, subtotal)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [quotationId, section, type, description, quantity, numericPrice, vat, subtotal]
+        `INSERT INTO quotation_products (quotation_id,description, quantity, price, vat, subtotal)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [quotationId,description, quantity, numericPrice, vat, subtotal]
       );
     }
 

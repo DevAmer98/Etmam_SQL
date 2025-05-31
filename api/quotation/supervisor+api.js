@@ -116,20 +116,7 @@ router.post('/quotations/supervisor', async (req, res) => {
       throw new Error('Missing required fields');
     }
 
-    // Validate products - match frontend validation
-    const invalidProducts = products.filter(
-      product => !product.type || 
-                 !product.section || 
-                 !product.quantity || 
-                 !product.description ||  // Added missing validation
-                 !product.price ||        // Added missing validation
-                 isNaN(parseFloat(product.price)) || 
-                 parseFloat(product.price) <= 0
-    );
 
-    if (invalidProducts.length > 0) {
-      throw new Error('Please fill in all product details with valid prices');
-    }
 
     // Format delivery date
     const formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
@@ -151,7 +138,7 @@ router.post('/quotations/supervisor', async (req, res) => {
       const { section, type, description, quantity, price } = product;
       
       // Double-check required fields (redundant but safe)
-      if (!section || !type || !description || !quantity || !price) {
+      if (!description || !quantity || !price) {
         throw new Error(`Missing product details for product: ${description || 'unnamed'}`);
       }
       
