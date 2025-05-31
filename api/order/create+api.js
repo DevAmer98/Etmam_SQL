@@ -230,8 +230,8 @@ try {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, custom_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status custom_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9) RETURNING id`,
             [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
           ),
           10000
@@ -246,16 +246,14 @@ try {
 
         // Insert products
         for (const product of products) {
-          const quantity = parseFloat(product.quantity);
-          const price = parseFloat(product.price);
-          const productTotal = quantity * price;
-          totalPrice += productTotal;
+          
+          totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
 
           await withTimeout(
             client.query(
-              `INSERT INTO order_products (order_id, section, type, description, quantity, price)
+              `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              [orderId, product.section, product.type, product.description || '', quantity, price]
+              [orderId, product.description || '', quantity, parseFloat(product.price) ,parseFloat(product.vat),parseFloat(product.subtotal)]
             ),
             5000
           );
