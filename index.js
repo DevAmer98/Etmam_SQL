@@ -36,6 +36,7 @@ import acceptedManagerQoutationApi from './api/acceptManagerQuotation/[id]+api.j
 import deliverdApi from './api/delivered/[id]+api.js';
 import notDeliverdApi from './api/not-delivered/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
+import { serveXLXS } from './api/order/pdf.js'; 
 import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
 import allClientsApi from './api/client/all+api.js'; 
@@ -100,6 +101,13 @@ app.get('/api/quotation/pdf/:quotationId', async (req, res) => {
   const { quotationId } = req.params;
   await servePDF(quotationId, res);
 });
+
+
+app.get('/api/order/xlxs/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  await serveXLXS(orderId, res);
+});
+
 
 // Error-handling middleware
 app.use((err, req, res, next) => {

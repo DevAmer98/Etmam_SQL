@@ -35,9 +35,8 @@ async function generateExcel(orderData) {
     { header: 'Product #', key: 'productNumber', width: 12 },
     { header: 'Product Name', key: 'product_name', width: 30 },
     { header: 'Quantity', key: 'quantity', width: 12 },
-    { header: 'Unit Price', key: 'unit_price', width: 15 },
-    { header: 'Total Price', key: 'total_price', width: 15 }
-  ];
+    { header: 'Unit Price', key: 'price', width: 15 },
+  ]; 
 
   // Add Product Rows
   orderData.products.forEach(product => {
@@ -45,8 +44,7 @@ async function generateExcel(orderData) {
       productNumber: product.productNumber,
       product_name: product.product_name,
       quantity: product.quantity,
-      unit_price: product.unit_price,
-      total_price: product.unit_price * product.quantity
+      unit_price: product.price,
     });
   });
 
@@ -90,22 +88,13 @@ async function fetchOrderDataFromDatabase(quotationId) {
       productNumber: String(index + 1).padStart(3, '0'),
     }));
 
-    const salesRepQuery = `
-      SELECT name, email, phone FROM salesreps
-      WHERE id = $1
-    `;
-    const salesRepResult = await pool.query(salesRepQuery, [orderResult.rows[0].sales_rep_id]);
-
+    
     const formattedCreatedAt = new Date(orderResult.rows[0].created_at).toISOString().split('T')[0];
 
     const orderData = {
       ...orderResult.rows[0],
       created_at: formattedCreatedAt,
       products: productsWithNumbers,
-      name: salesRepResult.rows[0]?.name || 'N/A',
-      email: salesRepResult.rows[0]?.email || 'N/A',
-      phone: salesRepResult.rows[0]?.phone || 'N/A',
-      supervisor_name: orderResult.rows[0]?.supervisor_name || 'No Supervisor Assigned',
     };
 
     return orderData;
