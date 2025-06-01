@@ -67,7 +67,7 @@ router.post('/clients', async (req, res) => {
     `;
 
     if (existingClient.length > 0) {
-      return res.status(409).json({ error: 'Client already exists with the same phone number or name in the company' });
+      return res.status(409).json({ error: 'العميل موجود بالفعل بنفس رقم الهاتف أو الاسم في الشركة '});
     }
 
 
