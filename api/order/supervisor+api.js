@@ -257,7 +257,6 @@ router.post('/orders/supervisor', async (req, res) => {
 
 
 // Fixed GET endpoint to fetch orders for supervisor
-// Fixed GET endpoint to fetch orders for supervisor
 router.get('/orders/supervisor', async (req, res) => {
   let client;
   try {
@@ -351,6 +350,41 @@ router.get('/orders/supervisor', async (req, res) => {
       error: error.message || 'Error fetching orders',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+});
+
+router.get('/orders/test/:id', async (req, res) => {
+  let client;
+  try {
+    const orderId = req.params.id;
+    const testQuery = `
+      SELECT 
+        orders.id,
+        orders.username AS sales_rep_username,
+        clients.username AS client_username,
+        clients.client_name,
+        clients.company_name AS client_company
+      FROM orders
+      JOIN clients ON orders.client_id = clients.id
+      WHERE orders.id = $1
+    `;
+    
+    client = await pool.connect();
+    const result = await client.query(testQuery, [orderId]);
+    
+    console.log('Test query result:', result.rows[0]);
+    
+    return res.status(200).json({
+      message: 'Test query success',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Test query error:', error);
+    return res.status(500).json({ error: error.message });
   } finally {
     if (client) {
       client.release();
