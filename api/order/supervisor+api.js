@@ -280,12 +280,12 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.longitude AS client_longitude,
         clients.street AS client_street,
         clients.city AS client_city,
-        clients.region AS client_region, 
+        clients.region AS client_region,
+        clients.a AS client_added_by,  
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
-        orders.total_price, 
-          clients.a AS client_added_by  
+        orders.total_price 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
