@@ -266,10 +266,9 @@ router.get('/orders/supervisor', async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-
-    
+    // Use the fixed explicit query
     const baseQuery = `
-       SELECT 
+      SELECT 
         orders.id,
         orders.client_id,
         orders.custom_id,
@@ -315,7 +314,6 @@ router.get('/orders/supervisor', async (req, res) => {
       WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
-    // Fixed: Remove undefined 'username' parameter
     const baseQueryParams = [limit, offset, `%${query}%`];
     const countQueryParams = [`%${query}%`];
 
@@ -323,28 +321,13 @@ router.get('/orders/supervisor', async (req, res) => {
       client = await pool.connect();
       return await Promise.all([
         withTimeout(client.query(baseQuery, baseQueryParams), 10000),
-        withTimeout(client.query(countQuery, countQueryParams), 10000) // Fixed: Execute count query
+        withTimeout(client.query(countQuery, countQueryParams), 10000)
       ]);
     });
 
     const orders = ordersResult.rows;
-
-    console.log('=== API RESPONSE DEBUG ===');
-console.log('First order client_added_by:', orders[0]?.client_added_by);
-console.log('First order client_name:', orders[0]?.client_name);
-console.log('All client-related fields in first order:');
-Object.keys(orders[0] || {}).forEach(key => {
-  if (key.includes('client') || key.includes('username') || key.includes('added')) {
-    console.log(`  ${key}: "${orders[0][key]}"`);
-  }
-});
-console.log('=== END API DEBUG ===');
-
-
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
-
-  
 
     return res.status(200).json({
       orders,
@@ -353,6 +336,7 @@ console.log('=== END API DEBUG ===');
       currentPage: page,
       totalPages: Math.ceil(totalCount / limit),
     });
+    
   } catch (error) {
     console.error('Error fetching orders:', error);
     return res.status(500).json({
