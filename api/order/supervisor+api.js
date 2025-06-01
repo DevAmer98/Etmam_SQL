@@ -330,13 +330,7 @@ router.get('/orders/supervisor', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
-    // Debug logging - remove after testing
-    console.log('Sample order data:', {
-      id: orders[0]?.id,
-      sales_rep_username: orders[0]?.sales_rep_username,
-      client_username: orders[0]?.client_username,
-      client_name: orders[0]?.client_name
-    });
+    
 
     return res.status(200).json({
       orders,
@@ -366,7 +360,7 @@ router.get('/orders/test/:id', async (req, res) => {
       SELECT 
         orders.id,
         orders.username AS sales_rep_username,
-        clients.username AS client_username,
+        clients.username AS client_user_identifier,
         clients.client_name,
         clients.company_name AS client_company
       FROM orders
