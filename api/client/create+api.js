@@ -58,6 +58,19 @@ router.post('/clients', async (req, res) => {
       return res.status(400).json({ error: 'Missing required field: tax_number' });
     }
 
+     // 🚫 Check for existing client with same phone number or client_name in the same company
+    const existingClient = await sql`
+      SELECT * FROM clients 
+      WHERE phone_number = ${phone_number} 
+         OR (client_name = ${client_name} AND company_name = ${company_name})
+      LIMIT 1;
+    `;
+
+    if (existingClient.length > 0) {
+      return res.status(409).json({ error: 'Client already exists with the same phone number or name in the company' });
+    }
+
+
     // Use null for `tax_number` if it's optional
     const response = await executeWithRetry(async () => {
       return await withTimeout(
