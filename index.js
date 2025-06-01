@@ -64,7 +64,7 @@ app.use('/api/order', storekeeperAcceptOrderApi);
 app.use('/api/order', salesOrderApi);
 app.use('/api', ordersupervisorApi); // Use your new router
 app.use('/api/quotation', salesQuotationApi);
-app.use('/api', quotationSupervisorApi); // Use your new router
+app.use('/api/quotation', quotationSupervisorApi); // Use your new router
 app.use('/api/quotation', supervisorAcceptQuotationApi); // Mount under /api/order
 app.use('/api/quotation', storekeeperAcceptQuotationApi);
 app.use('/api', getFcmApi);
