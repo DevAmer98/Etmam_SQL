@@ -266,8 +266,6 @@ router.get('/orders/supervisor', async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-
-    
     const baseQuery = `
       SELECT 
         orders.*, 
@@ -280,12 +278,12 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.longitude AS client_longitude,
         clients.street AS client_street,
         clients.city AS client_city,
-        clients.region AS client_region,
-        clients.a AS client_added_by,  
+        clients.region AS client_region, 
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
-        orders.total_price 
+        orders.total_price, 
+        clients.username AS client_added_by  
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
@@ -313,19 +311,6 @@ router.get('/orders/supervisor', async (req, res) => {
     });
 
     const orders = ordersResult.rows;
-
-    console.log('=== API RESPONSE DEBUG ===');
-console.log('First order client_added_by:', orders[0]?.client_added_by);
-console.log('First order client_name:', orders[0]?.client_name);
-console.log('All client-related fields in first order:');
-Object.keys(orders[0] || {}).forEach(key => {
-  if (key.includes('client') || key.includes('username') || key.includes('added')) {
-    console.log(`  ${key}: "${orders[0][key]}"`);
-  }
-});
-console.log('=== END API DEBUG ===');
-
-
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
