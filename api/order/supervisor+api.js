@@ -266,9 +266,30 @@ router.get('/orders/supervisor', async (req, res) => {
 
     const offset = (page - 1) * limit;
 
+
+    
     const baseQuery = `
-      SELECT 
-        orders.*, 
+       SELECT 
+        orders.id,
+        orders.client_id,
+        orders.custom_id,
+        orders.delivery_date,
+        orders.delivery_type,
+        orders.status,
+        orders.supervisoraccept,
+        orders.manageraccept,
+        orders.storekeeperaccept,
+        orders.total_price,
+        orders.total_subtotal,
+        orders.total_vat,
+        orders.notes,
+        orders.driver_notes,
+        orders.storekeeper_notes,
+        orders.supervisor_id,
+        orders.actual_delivery_date,
+        orders.created_at,
+        orders.updated_at,
+        orders.deleted_at,
         clients.client_name AS client_name,
         clients.phone_number AS client_phone,
         clients.company_name AS client_company,
@@ -278,12 +299,8 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.longitude AS client_longitude,
         clients.street AS client_street,
         clients.city AS client_city,
-        clients.region AS client_region, 
-        orders.status,
-        orders.storekeeperaccept,
-        orders.actual_delivery_date,
-        orders.total_price, 
-          clients.username AS client_added_by  
+        clients.region AS client_region,
+        clients.username AS client_added_by
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
