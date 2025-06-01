@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'url';
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs/promises';
 import ExcelJS from 'exceljs';
 import pg from 'pg';
 const { Pool } = pg;
@@ -103,7 +103,6 @@ async function fetchOrderDataFromDatabase(orderId) {
     throw new Error('Failed to fetch order data');
   }
 }
-
 /**
  * Serves the Excel file for a given order ID.
  * @param {string} orderId - The ID of the order.
@@ -111,19 +110,33 @@ async function fetchOrderDataFromDatabase(orderId) {
  */
 export async function serveXLXS(orderId, res) {
   try {
-    const orderData = await fetchOrderDataFromDatabase(orderId);
-    const excelBuffer = await generateExcel(orderData);
+    const filePath = path.join(__dirname, 'exports', `order_${orderId}.xlsx`);
 
-    const customId = orderData.custom_id || `order_${orderId}`;
-    const fileName = `order_${customId}.xlsx`;
+    // Try reading existing file
+    const fileBuffer = await fs.readFile(filePath);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-    res.setHeader('Content-Length', excelBuffer.length);
+    res.setHeader('Content-Disposition', `attachment; filename=order_${orderId}.xlsx`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    res.send(fileBuffer);
 
-    res.send(excelBuffer);
-  } catch (error) {
-    console.error('Error serving Excel:', error);
-    res.status(500).json({ error: 'Failed to generate Excel. Please try again later.' });
+  } catch (readError) {
+    console.warn('Excel file not found on disk. Generating new one...');
+    try {
+      const orderData = await fetchOrderDataFromDatabase(orderId);
+      const buffer = await generateExcel(orderData);
+
+      // Optionally save for future reuse
+      const filePath = path.join(__dirname, 'exports', `order_${orderId}.xlsx`);
+      await fs.writeFile(filePath, buffer);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=order_${orderId}.xlsx`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (genError) {
+      console.error('Error generating Excel:', genError);
+      res.status(500).json({ error: 'Failed to generate Excel file' });
+    }
   }
 }
