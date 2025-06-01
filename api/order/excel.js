@@ -62,7 +62,8 @@ async function generateExcel(orderData) {
 
 async function generateExcel(orderData) {
   const workbook = new ExcelJS.Workbook();
-  const templatePath = path.join(__dirname, '..', '..', '..', 'templates', 'Order.xlsx');
+  const templatePath = path.resolve(__dirname, '../../templates/Order.xlsx');
+
 
   await workbook.xlsx.readFile(templatePath);
 
