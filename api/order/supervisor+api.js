@@ -257,7 +257,7 @@ router.post('/orders/supervisor', async (req, res) => {
 
 
 // Fixed GET endpoint to fetch orders for supervisor
-router.get('/orders/supervisor', async (req, res) => {
+router.get('/supervisor', async (req, res) => {
   let client;
   try {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
