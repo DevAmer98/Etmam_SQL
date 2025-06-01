@@ -170,33 +170,26 @@ async function fetchOrderDataFromDatabase(orderId) {
  */
 export async function serveXLXS(orderId, res) {
   try {
-    const filePath = path.join(__dirname, 'exports', `order_${orderId}.xlsx`);
+    // Fetch order data from the database
+    const orderData = await fetchOrderDataFromDatabase(orderId);
 
-    // Try reading existing file
-    const fileBuffer = await fs.readFile(filePath);
+    // Generate Excel file as buffer
+    const buffer = await generateExcel(orderData);
 
+    // Optional: use custom_id if available
+    const customId = orderData.custom_id || `order_${orderId}`;
+    const fileName = `order_${customId}.xlsx`;
+
+    // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=order_${orderId}.xlsx`);
-    res.setHeader('Content-Length', fileBuffer.length);
-    res.send(fileBuffer);
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.setHeader('Content-Length', buffer.length);
 
-  } catch (readError) {
-    console.warn('Excel file not found on disk. Generating new one...');
-    try {
-      const orderData = await fetchOrderDataFromDatabase(orderId);
-      const buffer = await generateExcel(orderData);
+    // Send buffer directly
+    res.send(buffer);
 
-      // Optionally save for future reuse
-      const filePath = path.join(__dirname, 'exports', `order_${orderId}.xlsx`);
-      await fs.writeFile(filePath, buffer);
-
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=order_${orderId}.xlsx`);
-      res.setHeader('Content-Length', buffer.length);
-      res.send(buffer);
-    } catch (genError) {
-      console.error('Error generating Excel:', genError);
-      res.status(500).json({ error: 'Failed to generate Excel file' });
-    }
+  } catch (error) {
+    console.error('Error generating Excel:', error);
+    res.status(500).json({ error: 'Failed to generate Excel file. Please try again later.' });
   }
 }
