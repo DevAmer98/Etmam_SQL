@@ -109,7 +109,7 @@ async function fetchOrderDataFromDatabase(orderId) {
  * @param {string} orderId - The ID of the order.
  * @param {Object} res - The Express response object.
  */
-export async function serveExcel(orderId, res) {
+export async function serveXlxs(orderId, res) {
   try {
     const orderData = await fetchOrderDataFromDatabase(orderId);
     const excelBuffer = await generateExcel(orderData);
