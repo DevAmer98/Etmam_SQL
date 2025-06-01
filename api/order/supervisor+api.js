@@ -257,6 +257,7 @@ router.post('/orders/supervisor', async (req, res) => {
 
 
 // Fixed GET endpoint to fetch orders for supervisor
+// Fixed GET endpoint to fetch orders for supervisor
 router.get('/orders/supervisor', async (req, res) => {
   let client;
   try {
@@ -268,7 +269,27 @@ router.get('/orders/supervisor', async (req, res) => {
 
     const baseQuery = `
       SELECT 
-        orders.*, 
+        orders.id,
+        orders.client_id,
+        orders.delivery_date,
+        orders.delivery_type,
+        orders.notes,
+        orders.created_at,
+        orders.updated_at,
+        orders.deleted_at,
+        orders.status,
+        orders.actual_delivery_date,
+        orders.storekeeper_notes,
+        orders.total_price,
+        orders.username AS sales_rep_username,  -- Renamed for clarity
+        orders.supervisoraccept,
+        orders.storekeeperaccept,
+        orders.manageraccept,
+        orders.custom_id,
+        orders.driver_notes,
+        orders.supervisor_id,
+        orders.total_vat,
+        orders.total_subtotal,
         clients.client_name AS client_name,
         clients.phone_number AS client_phone,
         clients.company_name AS client_company,
@@ -279,11 +300,7 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
-        clients.username AS client_username,
-        orders.status,
-        orders.storekeeperaccept,
-        orders.actual_delivery_date,
-        orders.total_price 
+        clients.username AS client_username  -- This is the client's username
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
@@ -298,7 +315,6 @@ router.get('/orders/supervisor', async (req, res) => {
       WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
 
-    // Fixed: Remove undefined 'username' parameter
     const baseQueryParams = [limit, offset, `%${query}%`];
     const countQueryParams = [`%${query}%`];
 
@@ -306,7 +322,7 @@ router.get('/orders/supervisor', async (req, res) => {
       client = await pool.connect();
       return await Promise.all([
         withTimeout(client.query(baseQuery, baseQueryParams), 10000),
-        withTimeout(client.query(countQuery, countQueryParams), 10000) // Fixed: Execute count query
+        withTimeout(client.query(countQuery, countQueryParams), 10000)
       ]);
     });
 
@@ -314,7 +330,13 @@ router.get('/orders/supervisor', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
-  
+    // Debug logging - remove after testing
+    console.log('Sample order data:', {
+      id: orders[0]?.id,
+      sales_rep_username: orders[0]?.sales_rep_username,
+      client_username: orders[0]?.client_username,
+      client_name: orders[0]?.client_name
+    });
 
     return res.status(200).json({
       orders,
