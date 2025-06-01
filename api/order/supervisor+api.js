@@ -299,7 +299,8 @@ router.get('/orders/supervisor', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
-        clients.username AS client_username  -- This is the client's username
+        clients.username AS client_user_identifier
+
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
