@@ -19,6 +19,8 @@ const pool = new Pool({
  * @param {Object} orderData - The order data including products.
  * @returns {Promise<Buffer>} - Returns the Excel buffer.
  */
+
+/*
 async function generateExcel(orderData) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Order');
@@ -32,23 +34,79 @@ async function generateExcel(orderData) {
 
   // Product Table Headers
   sheet.columns = [
-    { header: 'Product #', key: 'productNumber', width: 12 },
-    { header: 'Product Name', key: 'product_name', width: 30 },
-    { header: 'Quantity', key: 'quantity', width: 12 },
-    { header: 'Unit Price', key: 'price', width: 15 },
-  ]; 
+  { header: 'Product #', key: 'productNumber', width: 10 },
+  { header: 'Description', key: 'description', width: 30 },
+  { header: 'Quantity', key: 'quantity', width: 10 },
+  { header: 'Unit Price', key: 'price', width: 15 },
+  { header: 'VAT', key: 'vat', width: 10 },
+  { header: 'Subtotal', key: 'subtotal', width: 15 },
+];
 
   // Add Product Rows
   orderData.products.forEach(product => {
-    sheet.addRow({
-      productNumber: product.productNumber,
-      product_name: product.product_name,
-      quantity: product.quantity,
-    price: product.price, // match the key
-    });
+   sheet.addRow({
+    productNumber: product.productNumber,
+    description: product.description,
+    quantity: product.quantity,
+    price: product.price,
+    vat: product.vat,
+    subtotal: product.subtotal,
+  });
   });
 
   // Buffer output
+  return await workbook.xlsx.writeBuffer();
+}
+
+*/
+
+async function generateExcel(orderData) {
+  const workbook = new ExcelJS.Workbook();
+  const templatePath = path.join(__dirname, 'template', 'order_template.xlsx');
+  await workbook.xlsx.readFile(templatePath);
+
+  const sheet = workbook.getWorksheet(1); // Assuming first sheet
+
+  // Replace placeholders in known cells
+  const replacements = {
+    '{{client_name}}': orderData.client_name,
+    '{{company_name}}': orderData.company_name,
+    '{{created_at}}': orderData.created_at,
+  };
+
+  sheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      if (typeof cell.value === 'string' && replacements[cell.value]) {
+        cell.value = replacements[cell.value];
+      }
+    });
+  });
+
+  // Find the row with '{{rows}}'
+  let insertRowIndex;
+  sheet.eachRow((row, rowNumber) => {
+    row.eachCell((cell) => {
+      if (cell.value === '{{rows}}') {
+        insertRowIndex = rowNumber;
+      }
+    });
+  });
+
+  if (insertRowIndex) {
+    sheet.spliceRows(insertRowIndex, 1); // remove the placeholder row
+
+    // Insert products
+    orderData.products.forEach((product, i) => {
+      sheet.insertRow(insertRowIndex + i, [
+        product.productNumber,
+        product.description,
+        product.quantity,
+        product.price,
+      ]);
+    });
+  }
+
+  // Return buffer
   return await workbook.xlsx.writeBuffer();
 }
 
