@@ -21,7 +21,7 @@ const pool = new Pool({
  */
 async function generateExcel(orderData) {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Quotation');
+  const sheet = workbook.addWorksheet('Order');
 
   // Header Information
   sheet.addRow(['Order ID', orderData.custom_id || orderData.id]);
@@ -44,7 +44,7 @@ async function generateExcel(orderData) {
       productNumber: product.productNumber,
       product_name: product.product_name,
       quantity: product.quantity,
-      unit_price: product.price,
+    price: product.price, // match the key
     });
   });
 
@@ -54,34 +54,34 @@ async function generateExcel(orderData) {
 
 /**
  * Fetches order data from the database.
- * @param {string} quotationId - The ID of the order.
+ * @param {string} orderId - The ID of the order.
  * @returns {Promise<Object>} - The order data.
  */
-async function fetchOrderDataFromDatabase(quotationId) {
+async function fetchOrderDataFromDatabase(orderId) {
   try {
-    console.log(`Fetching data for quotation ID: ${quotationId}`);
+    console.log(`Fetching data for order ID: ${orderId}`);
 
     const orderQuery = `
       SELECT q.*, c.company_name, c.client_name, c.phone_number, 
              c.tax_number, c.branch_number, c.latitude, c.longitude, 
              c.street, c.city, c.region, q.storekeeper_notes,
              s.name AS supervisor_name
-      FROM quotations q
+      FROM orders q
       JOIN clients c ON q.client_id = c.id
       LEFT JOIN supervisors s ON q.supervisor_id = s.id
       WHERE q.id = $1
     `;
-    const orderResult = await pool.query(orderQuery, [quotationId]);
+    const orderResult = await pool.query(orderQuery, [orderId]);
 
     if (orderResult.rows.length === 0) {
       throw new Error('Quotation not found');
     }
 
     const productsQuery = `
-      SELECT * FROM quotation_products
-      WHERE quotation_id = $1
+      SELECT * FROM order_products
+      WHERE order_id = $1
     `;
-    const productsResult = await pool.query(productsQuery, [quotationId]);
+    const productsResult = await pool.query(productsQuery, [orderId]);
 
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
       ...product,
@@ -99,23 +99,23 @@ async function fetchOrderDataFromDatabase(quotationId) {
 
     return orderData;
   } catch (error) {
-    console.error('Error fetching quotation data:', error);
-    throw new Error('Failed to fetch quotation data');
+    console.error('Error fetching order data:', error);
+    throw new Error('Failed to fetch order data');
   }
 }
 
 /**
  * Serves the Excel file for a given order ID.
- * @param {string} quotationId - The ID of the order.
+ * @param {string} orderId - The ID of the order.
  * @param {Object} res - The Express response object.
  */
-export async function serveExcel(quotationId, res) {
+export async function serveExcel(orderId, res) {
   try {
-    const orderData = await fetchOrderDataFromDatabase(quotationId);
+    const orderData = await fetchOrderDataFromDatabase(orderId);
     const excelBuffer = await generateExcel(orderData);
 
-    const customId = orderData.custom_id || `quotation_${quotationId}`;
-    const fileName = `quotation_${customId}.xlsx`;
+    const customId = orderData.custom_id || `order_${orderId}`;
+    const fileName = `order_${customId}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
