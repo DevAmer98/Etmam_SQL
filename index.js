@@ -36,7 +36,7 @@ import acceptedManagerQoutationApi from './api/acceptManagerQuotation/[id]+api.j
 import deliverdApi from './api/delivered/[id]+api.js';
 import notDeliverdApi from './api/not-delivered/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
-import { servePDF } from './api/order/pdf.js'; 
+import { serveOrderPDF } from './api/order/pdf.js'; 
 import { serveXLXS } from './api/order/excel.js'; 
 import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
