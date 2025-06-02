@@ -109,6 +109,12 @@ app.get('/api/order/xlxs/:orderId', async (req, res) => {
 });
 
 
+app.get('/api/order/pdf/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  await servePDF(orderId, res);
+});
+
+
 // Error-handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
