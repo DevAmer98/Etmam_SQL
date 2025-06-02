@@ -65,6 +65,10 @@ async function generateExcel(orderData) {
   const templatePath = path.resolve(__dirname, '../../templates/Order.xlsx');
 
 
+const orderNumberMatch = (orderData.custom_id || '').match(/(\d{5})$/);
+const orderNumber = orderNumberMatch ? orderNumberMatch[1] : '';
+
+
   await workbook.xlsx.readFile(templatePath);
 
   const sheet = workbook.getWorksheet(1); // Assuming first sheet
@@ -74,6 +78,8 @@ async function generateExcel(orderData) {
     '{{client_name}}': orderData.client_name,
     '{{company_name}}': orderData.company_name,
     '{{created_at}}': orderData.created_at,
+      '{{order_number}}': orderNumber,
+
   };
 
   sheet.eachRow((row) => {
