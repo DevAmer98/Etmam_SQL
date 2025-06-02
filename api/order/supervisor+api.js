@@ -263,7 +263,7 @@ router.get('/supervisor', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
     const query = req.query.query || '';
-
+    const hasStatus = status !== 'all';
     const offset = (page - 1) * limit;
 
      
