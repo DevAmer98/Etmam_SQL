@@ -359,13 +359,18 @@ router.post('/orders/supervisor', async (req, res) => {
 router.get('/supervisor', async (req, res) => {
   let client;
   try {
-    const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
-    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
     const query = req.query.query || '';
     const status = req.query.status || 'all';
-    const offset = (page - 1) * limit;
+
+    const limit = Number.isNaN(+req.query.limit) ? 10 : Math.min(+req.query.limit, 50);
+const page = Number.isNaN(+req.query.page) ? 1 : Math.max(+req.query.page, 1);
+const offset = (page - 1) * limit;
+
 
     client = await pool.connect();
+
+
+
 
     // Build dynamic filter conditions
     const conditions = [];
