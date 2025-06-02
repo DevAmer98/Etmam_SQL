@@ -202,7 +202,7 @@ router.post('/drivers', async (req, res) => {
       userId = clerkUser.id;
 
       // Send welcome email with credentials
-      await sendWelcomeEmail(email, name, temporaryPassword, role);
+     // await sendWelcomeEmail(email, name, temporaryPassword, role);
     }
 
     // Insert driver into database with role

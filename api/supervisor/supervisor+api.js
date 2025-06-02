@@ -201,7 +201,7 @@ router.post('/supervisors', async (req, res) => {
       userId = clerkUser.id;
 
       // Send welcome email with credentials
-      await sendWelcomeEmail(email, name, temporaryPassword, role);
+      //await sendWelcomeEmail(email, name, temporaryPassword, role);
     }
 
     // Insert supervisor into database
