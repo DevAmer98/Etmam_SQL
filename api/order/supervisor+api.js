@@ -253,7 +253,7 @@ router.post('/orders/supervisor', async (req, res) => {
     }
   }
 });
-
+ 
 
  
 // Fixed GET endpoint to fetch orders for supervisor
@@ -265,6 +265,12 @@ router.get('/supervisor', async (req, res) => {
     const query = req.query.query || '';
 
     const offset = (page - 1) * limit;
+
+     
+  
+      const filterCondition = hasStatus
+        ? `(orders.status = $4 OR orders.supervisoraccept = $4)`
+        : 'TRUE';
 
     const baseQuery = `
       SELECT 
