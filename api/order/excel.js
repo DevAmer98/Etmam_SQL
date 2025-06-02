@@ -65,7 +65,10 @@ async function generateExcel(orderData) {
   const templatePath = path.resolve(__dirname, '../../templates/Order.xlsx');
 
 
-const orderNumberMatch = (orderData.custom_id || '').match(/(\d{5})$/);
+
+
+const customId = orderData.custom_id || '';
+const orderNumberMatch = customId.match(/(\d{5})(?!.*\d)/);
 const orderNumber = orderNumberMatch ? orderNumberMatch[1] : '';
 
 
