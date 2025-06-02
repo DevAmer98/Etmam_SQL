@@ -255,7 +255,7 @@ router.post('/orders/supervisor', async (req, res) => {
 });
 
 
-
+ 
 // Fixed GET endpoint to fetch orders for supervisor
 router.get('/supervisor', async (req, res) => {
   let client;
@@ -304,6 +304,7 @@ router.get('/supervisor', async (req, res) => {
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
+      AND ${filterCondition}
       ORDER BY orders.created_at DESC
       LIMIT $1 OFFSET $2
     `;
@@ -345,139 +346,6 @@ router.get('/supervisor', async (req, res) => {
       error: error.message || 'Error fetching orders',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-});
-
-
-
-
-// Fixed GET endpoint to fetch orders for supervisor
-router.get('/orders/supervisor/:id', async (req, res) => {
-  let client;
-  try {
-    const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
-    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
-    const query = req.query.query || '';
-
-    const offset = (page - 1) * limit;
-
-    const baseQuery = `
-      SELECT 
-        orders.id,
-        orders.client_id,
-        orders.delivery_date,
-        orders.delivery_type,
-        orders.notes,
-        orders.created_at,
-        orders.updated_at,
-        orders.deleted_at,
-        orders.status,
-        orders.actual_delivery_date,
-        orders.storekeeper_notes,
-        orders.total_price,
-        orders.username AS sales_rep_username,  -- Renamed for clarity
-        orders.supervisoraccept,
-        orders.storekeeperaccept,
-        orders.manageraccept,
-        orders.custom_id,
-        orders.driver_notes,
-        orders.supervisor_id,
-        orders.total_vat,
-        orders.total_subtotal,
-        clients.client_name AS client_name,
-        clients.phone_number AS client_phone,
-        clients.company_name AS client_company,
-        clients.branch_number AS client_branch,
-        clients.tax_number AS client_tax,
-        clients.latitude AS client_latitude,
-        clients.longitude AS client_longitude,
-        clients.street AS client_street,
-        clients.city AS client_city,
-        clients.region AS client_region, 
-        clients.username AS client_user_identifier
-
-      FROM orders
-      JOIN clients ON orders.client_id = clients.id
-      WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
-      ORDER BY orders.created_at DESC
-      LIMIT $1 OFFSET $2
-    `;
-
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM orders
-      JOIN clients ON orders.client_id = clients.id
-      WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
-    `;
-
-    const baseQueryParams = [limit, offset, `%${query}%`];
-    const countQueryParams = [`%${query}%`];
-
-    const [ordersResult, countResult] = await executeWithRetry(async () => {
-      client = await pool.connect();
-      return await Promise.all([
-        withTimeout(client.query(baseQuery, baseQueryParams), 10000),
-        withTimeout(client.query(countQuery, countQueryParams), 10000)
-      ]);
-    });
-
-    const orders = ordersResult.rows;
-    const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
-    const hasMore = page * limit < totalCount;
-
-    
-
-    return res.status(200).json({
-      orders,
-      hasMore,
-      totalCount,
-      currentPage: page,
-      totalPages: Math.ceil(totalCount / limit),
-    });
-  } catch (error) {
-    console.error('Error fetching orders:', error);
-    return res.status(500).json({
-      error: error.message || 'Error fetching orders',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    });
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-});
-router.get('/orders/test/:id', async (req, res) => {
-  let client;
-  try {
-    const orderId = req.params.id;
-    const testQuery = `
-      SELECT 
-        orders.id,
-        orders.username AS sales_rep_username,
-        clients.username AS client_user_identifier,
-        clients.client_name,
-        clients.company_name AS client_company
-      FROM orders
-      JOIN clients ON orders.client_id = clients.id
-      WHERE orders.id = $1
-    `;
-    
-    client = await pool.connect();
-    const result = await client.query(testQuery, [orderId]);
-    
-    console.log('Test query result:', result.rows[0]);
-    
-    return res.status(200).json({
-      message: 'Test query success',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Test query error:', error);
-    return res.status(500).json({ error: error.message });
   } finally {
     if (client) {
       client.release();
