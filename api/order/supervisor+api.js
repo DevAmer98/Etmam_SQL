@@ -392,7 +392,6 @@ router.get('/supervisor', async (req, res) => {
       const filterCondition = hasStatus
         ? `(orders.status = $4 OR orders.supervisoraccept = $4)`
         : 'TRUE';
-
     const baseQuery = `
       SELECT 
         orders.id,
