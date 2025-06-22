@@ -396,6 +396,7 @@ router.get('/supervisor', async (req, res) => {
     const baseQuery = `
       SELECT 
         orders.id,
+        orders.order_number,
         orders.client_id,
         orders.delivery_date,
         orders.delivery_type,
