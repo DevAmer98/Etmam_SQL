@@ -223,6 +223,7 @@ router.get('/orders/salesRep', async (req, res) => {
         orders.actual_delivery_date,
         orders.total_price,
         orders.total_vat, 
+        orders.order_number,
         orders.total_subtotal 
       FROM orders
       JOIN clients ON orders.client_id = clients.id

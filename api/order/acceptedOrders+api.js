@@ -91,6 +91,7 @@ router.get('/orders/supervisorAccept', async (req, res) => {
         orders.storekeeperaccept,
         orders.supervisorAccept,
         orders.actual_delivery_date,
+        orders.order_number,
         orders.total_price 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
