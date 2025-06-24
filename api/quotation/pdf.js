@@ -63,7 +63,8 @@ function reformatProductName(name) {
     });
 
     // Populate the template with data
-    doc.setData(orderData);
+    doc.updateTemplate(orderData);
+
 
     // Render the document
     try {
