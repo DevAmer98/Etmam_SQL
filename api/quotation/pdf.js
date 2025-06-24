@@ -155,7 +155,7 @@ async function fetchOrderDataFromDatabase(quotationId) {
    const productsWithNumbers = productsResult.rows.map((product, index) => ({
   ...product,
   productNumber: String(index + 1).padStart(3, '0'),
-name: reformatProductName(fixBidirectionalText(product.name || ''))
+name: fixBidirectionalText(reformatProductName(product.name || ''))
 }));
 
     // Fetch sales representative
