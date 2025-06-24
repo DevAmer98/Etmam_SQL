@@ -26,17 +26,21 @@ function fixBidirectionalText(text) {
 
 
 function reformatProductName(name) {
-  // Match: "اونص شد150 16 - RO صحن مدور"
+  console.log('🧪 Raw name input:', name);
   const regex = /^(\S+)\s+(\S+)\s+(\S+)\s+-\s+(\S+)\s+(.+)$/;
   const match = name.match(regex);
+
   if (!match) {
-    console.warn('Name did not match expected pattern:', name);
+    console.warn('❌ No regex match:', name);
     return name;
   }
 
   const [_, unit, strength, size, brand, baseName] = match;
-  return `${baseName} ${brand} - ${size} ${unit} - ${strength}`;
+  const result = `${baseName} ${brand} - ${size} ${unit} - ${strength}`;
+  console.log('✅ Reformatted name:', result);
+  return result;
 }
+
 
 
 /**
@@ -156,6 +160,7 @@ async function fetchOrderDataFromDatabase(quotationId) {
   ...product,
   productNumber: String(index + 1).padStart(3, '0'),
 name: fixBidirectionalText(reformatProductName(product.name || ''))
+
 }));
 
     // Fetch sales representative
