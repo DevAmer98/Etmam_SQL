@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'url'; // Add this import
-import Docxtemplater from 'docxtemplater/js/docxtemplater.js';
-
+import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import fs from 'fs';
 import path from 'path';
@@ -64,8 +63,7 @@ function reformatProductName(name) {
     });
 
     // Populate the template with data
-    doc.updateTemplate(orderData);
-
+    doc.setData(orderData);
 
     // Render the document
     try {
