@@ -18,6 +18,36 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+
+/**
+ * Converts "صحن مدور RO - 16 اونص - شد150" to "صحن مدور - 16 اونص - شد150 - RO"
+ */
+function normalizeFullName(fullName) {
+  const parts = fullName.split(/\s*-\s*/);
+  if (parts.length !== 3) return fullName;
+
+  let [namePart, size, qty] = parts;
+
+  // Extract English words from the name part
+  const englishTokens = [];
+  const nameTokens = namePart.trim().split(/\s+/).filter(token => {
+    if (/^[A-Za-z0-9]+$/.test(token)) {
+      englishTokens.push(token);
+      return false;
+    }
+    return true;
+  });
+
+  const cleanName = nameTokens.join(' ');
+  const suffix = englishTokens.join(' ');
+
+  // Compose the final format
+  return suffix
+    ? `${cleanName} - ${size} - ${qty} - ${suffix}`
+    : `${cleanName} - ${size} - ${qty}`;
+}
+
+
 /**
  * Generates a PDF from order data using PDFKit.
  * @param {Object} orderData - The order data to populate the template.
@@ -132,9 +162,11 @@ async function fetchOrderDataFromDatabase(quotationId) {
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
-      ...product,
-      productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
-    }));
+  ...product,
+  productNumber: String(index + 1).padStart(3, '0'),
+  FullName: normalizeFullName(product.FullName), // Apply formatting
+}));
+
 
     // Fetch sales representative
     const salesRepQuery = `
