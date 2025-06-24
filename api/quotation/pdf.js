@@ -138,19 +138,12 @@ async function fetchOrderDataFromDatabase(quotationId) {
     console.log('Products Query Result:', productsResult.rows); // Log the query result
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
-const productsWithNumbers = productsResult.rows.map((product, index) => {
-  const originalName = product.name;
-  const fixedName = fixBidirectionalText(originalName || '');
+   const productsWithNumbers = productsResult.rows.map((product, index) => ({
+  ...product,
+  productNumber: String(index + 1).padStart(3, '0'),
+  description: fixBidirectionalText(product.name || '') // <-- this is the correct field used in the template
 
-  console.log(`Product ${index + 1} original:`, originalName);
-  console.log(`Product ${index + 1} final name:`, fixedName);
-
-  return {
-    ...product,
-    productNumber: String(index + 1).padStart(3, '0'),
-    name: fixedName
-  };
-});
+}));
 
     // Fetch sales representative
     const salesRepQuery = `
