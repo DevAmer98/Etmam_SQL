@@ -18,18 +18,6 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-
-function reorderArabicName(name) {
-  if (!name || typeof name !== 'string') return ''; // Fallback for missing/invalid name
-
-  const parts = name.split('-').map(p => p.trim());
-  if (parts.length === 3) {
-    const [type, size, pack] = parts;
-    return `${pack} ${size} - ${type}`;
-  }
-  return name;
-}
-
 /**
  * Generates a PDF from order data using PDFKit.
  * @param {Object} orderData - The order data to populate the template.
@@ -146,8 +134,6 @@ async function fetchOrderDataFromDatabase(quotationId) {
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
       ...product,
       productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
-description: reorderArabicName(product.name || product.description || 'Unnamed product'),
-
     }));
 
     // Fetch sales representative
