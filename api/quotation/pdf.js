@@ -18,12 +18,18 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-function fixBidirectionalText(text) {
-  if (typeof text !== 'string') return ''; // return empty string or fallback
-  const LRM = '\u200E'; // Left-to-right mark
-  return text.replace(/([A-Za-z0-9\-]+)/g, `${LRM}$1${LRM}`);
-}
 
+function reorderArabicProductName(name) {
+  // This assumes the format: "صحن مدور RO - 16 اونص - شد150"
+  const parts = name.split('-').map(p => p.trim()).filter(Boolean);
+
+  if (parts.length === 3) {
+    const [type, size, pack] = parts;
+    return `${size} ${pack} - ${type}`;
+  }
+
+  return name; // fallback to original if format unexpected
+}
 
 /**
  * Generates a PDF from order data using PDFKit.
@@ -138,12 +144,12 @@ async function fetchOrderDataFromDatabase(quotationId) {
     console.log('Products Query Result:', productsResult.rows); // Log the query result
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
-   const productsWithNumbers = productsResult.rows.map((product, index) => ({
-  ...product,
-  productNumber: String(index + 1).padStart(3, '0'),
-  description: fixBidirectionalText(product.name || '') // <-- this is the correct field used in the template
+    const productsWithNumbers = productsResult.rows.map((product, index) => ({
+      ...product,
+      productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
+      description: reorderArabicProductName(product.name || '')
 
-}));
+    }));
 
     // Fetch sales representative
     const salesRepQuery = `

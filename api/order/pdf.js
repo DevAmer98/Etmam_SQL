@@ -12,16 +12,6 @@ import libre from 'libreoffice-convert'; // For .docx to PDF conversion
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
-function fixBidirectionalText(text) {
-  const LRM = '\u200E'; // Left-to-right mark
-  const RLM = '\u200F'; // Right-to-left mark
-
-  // Wrap Latin words and digits with LRM
-  return text.replace(/([A-Za-z0-9\-]+)/g, `${LRM}$1${LRM}`);
-}
-
-
 // Create a connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -143,8 +133,6 @@ async function fetchOrderDataFromDatabase(orderId) {
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
       ...product,
       productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
-        name: fixBidirectionalText(product.name), // Fix the bidirectional issue here
-
     }));
 
     // Fetch sales representative
@@ -195,7 +183,7 @@ export async function serveOrderPDF(orderId, res) {
 
 
       // Use custom_id for the filename
-      const customId = orderData.custom_id || `order_${orderId}`; // Fallback to quotationId if custom_id is missing
+const customId = orderData.custom_id || orderData.order_number || `order_${orderId}`;
       const fileName = `order_${customId}.pdf`;
 
     // Set headers for mobile compatibility
