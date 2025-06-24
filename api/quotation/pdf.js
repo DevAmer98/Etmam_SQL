@@ -26,13 +26,18 @@ function fixBidirectionalText(text) {
 
 
 function reformatProductName(name) {
-  const regex = /^(.+?)\s+(\S+)\s+(\S+)\s+-\s+(\S+)\s+(.+)$/;
+  // Match: "اونص شد150 16 - RO صحن مدور"
+  const regex = /^(\S+)\s+(\S+)\s+(\S+)\s+-\s+(\S+)\s+(.+)$/;
   const match = name.match(regex);
-  if (!match) return name; // Return as-is if pattern not matched
+  if (!match) {
+    console.warn('Name did not match expected pattern:', name);
+    return name;
+  }
 
-  const [, unit, strength, size, brand, baseName] = match;
+  const [_, unit, strength, size, brand, baseName] = match;
   return `${baseName} ${brand} - ${size} ${unit} - ${strength}`;
 }
+
 
 /**
  * Generates a PDF from order data using PDFKit.
@@ -150,7 +155,7 @@ async function fetchOrderDataFromDatabase(quotationId) {
    const productsWithNumbers = productsResult.rows.map((product, index) => ({
   ...product,
   productNumber: String(index + 1).padStart(3, '0'),
-  name: fixBidirectionalText(reformatProductName(product.name || '')),
+name: reformatProductName(fixBidirectionalText(product.name || ''))
 }));
 
     // Fetch sales representative
