@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'url'; // Add this import
-import Docxtemplater from 'docxtemplater';
+import Docxtemplater from 'docxtemplater/js/docxtemplater.js';
+
 import PizZip from 'pizzip';
 import fs from 'fs';
 import path from 'path';
