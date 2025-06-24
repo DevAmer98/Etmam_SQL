@@ -147,7 +147,7 @@ async function fetchOrderDataFromDatabase(quotationId) {
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
       ...product,
       productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
-      description: reorderArabicProductName(product.name || '')
+description: reorderArabicName(product.name)
 
     }));
 
