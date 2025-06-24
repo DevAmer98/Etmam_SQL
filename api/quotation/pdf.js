@@ -18,6 +18,15 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+function fixBidirectionalText(text) {
+  const LRM = '\u200E'; // Left-to-right mark
+  const RLM = '\u200F'; // Right-to-left mark
+
+  // Wrap Latin words and digits with LRM
+  return text.replace(/([A-Za-z0-9\-]+)/g, `${LRM}$1${LRM}`);
+}
+
+
 /**
  * Generates a PDF from order data using PDFKit.
  * @param {Object} orderData - The order data to populate the template.
@@ -134,6 +143,8 @@ async function fetchOrderDataFromDatabase(quotationId) {
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
       ...product,
       productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
+              name: fixBidirectionalText(product.name), // Fix the bidirectional issue here
+
     }));
 
     // Fetch sales representative
