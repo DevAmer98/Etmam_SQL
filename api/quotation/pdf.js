@@ -19,12 +19,11 @@ const pool = new Pool({
 });
 
 function fixBidirectionalText(text) {
+  if (typeof text !== 'string') return ''; // return empty string or fallback
   const LRM = '\u200E'; // Left-to-right mark
-  const RLM = '\u200F'; // Right-to-left mark
-
-  // Wrap Latin words and digits with LRM
   return text.replace(/([A-Za-z0-9\-]+)/g, `${LRM}$1${LRM}`);
 }
+
 
 
 /**
@@ -141,11 +140,10 @@ async function fetchOrderDataFromDatabase(quotationId) {
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
-      ...product,
-      productNumber: String(index + 1).padStart(3, '0'), // Format as 001, 002, etc.
-              name: fixBidirectionalText(product.name), // Fix the bidirectional issue here
-
-    }));
+  ...product,
+  productNumber: String(index + 1).padStart(3, '0'),
+  name: fixBidirectionalText(product.name || ''),
+}));
 
     // Fetch sales representative
     const salesRepQuery = `
