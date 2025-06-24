@@ -19,18 +19,14 @@ const pool = new Pool({
 });
 
 
-function reorderArabicProductName(name) {
-  // This assumes the format: "صحن مدور RO - 16 اونص - شد150"
-  const parts = name.split('-').map(p => p.trim()).filter(Boolean);
-
+function reorderArabicName(name) {
+  const parts = name.split('-').map(p => p.trim());
   if (parts.length === 3) {
     const [type, size, pack] = parts;
-    return `${size} ${pack} - ${type}`;
+    return `${pack} ${size} - ${type}`;
   }
-
-  return name; // fallback to original if format unexpected
+  return name;
 }
-
 /**
  * Generates a PDF from order data using PDFKit.
  * @param {Object} orderData - The order data to populate the template.
