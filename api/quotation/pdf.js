@@ -25,24 +25,6 @@ function fixBidirectionalText(text) {
 }
 
 
-function reformatProductName(name) {
-  console.log('🧪 Raw name input:', name);
-  const regex = /^(\S+)\s+(\S+)\s+(\S+)\s+-\s+(\S+)\s+(.+)$/;
-  const match = name.match(regex);
-
-  if (!match) {
-    console.warn('❌ No regex match:', name);
-    return name;
-  }
-
-  const [_, unit, strength, size, brand, baseName] = match;
-  const result = `${baseName} ${brand} - ${size} ${unit} - ${strength}`;
-  console.log('✅ Reformatted name:', result);
-  return result;
-}
-
-
-
 /**
  * Generates a PDF from order data using PDFKit.
  * @param {Object} orderData - The order data to populate the template.
@@ -156,12 +138,19 @@ async function fetchOrderDataFromDatabase(quotationId) {
     console.log('Products Query Result:', productsResult.rows); // Log the query result
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
-   const productsWithNumbers = productsResult.rows.map((product, index) => ({
-  ...product,
-  productNumber: String(index + 1).padStart(3, '0'),
-name: fixBidirectionalText(product.name || '')
+const productsWithNumbers = productsResult.rows.map((product, index) => {
+  const originalName = product.name;
+  const fixedName = fixBidirectionalText(originalName || '');
 
-}));
+  console.log(`Product ${index + 1} original:`, originalName);
+  console.log(`Product ${index + 1} final name:`, fixedName);
+
+  return {
+    ...product,
+    productNumber: String(index + 1).padStart(3, '0'),
+    name: fixedName
+  };
+});
 
     // Fetch sales representative
     const salesRepQuery = `
