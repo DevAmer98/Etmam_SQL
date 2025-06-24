@@ -25,6 +25,14 @@ function fixBidirectionalText(text) {
 }
 
 
+function reformatProductName(name) {
+  const regex = /^(.+?)\s+(\S+)\s+(\S+)\s+-\s+(\S+)\s+(.+)$/;
+  const match = name.match(regex);
+  if (!match) return name; // Return as-is if pattern not matched
+
+  const [, unit, strength, size, brand, baseName] = match;
+  return `${baseName} ${brand} - ${size} ${unit} - ${strength}`;
+}
 
 /**
  * Generates a PDF from order data using PDFKit.
@@ -139,10 +147,10 @@ async function fetchOrderDataFromDatabase(quotationId) {
     console.log('Products Query Result:', productsResult.rows); // Log the query result
 
     // Add product numbers dynamically (no need to recalculate VAT and subtotal)
-    const productsWithNumbers = productsResult.rows.map((product, index) => ({
+   const productsWithNumbers = productsResult.rows.map((product, index) => ({
   ...product,
   productNumber: String(index + 1).padStart(3, '0'),
-  name: fixBidirectionalText(product.name || ''),
+  name: fixBidirectionalText(reformatProductName(product.name || '')),
 }));
 
     // Fetch sales representative
