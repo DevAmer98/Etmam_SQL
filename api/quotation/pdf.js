@@ -23,6 +23,8 @@ const pool = new Pool({
  * Converts "صحن مدور RO - 16 اونص - شد150" to "صحن مدور - 16 اونص - شد150 - RO"
  */
 function normalizeFullName(fullName) {
+  if (typeof fullName !== 'string') return fullName; // <--- Safeguard
+
   const parts = fullName.split(/\s*-\s*/);
   if (parts.length !== 3) return fullName;
 
@@ -41,7 +43,6 @@ function normalizeFullName(fullName) {
   const cleanName = nameTokens.join(' ');
   const suffix = englishTokens.join(' ');
 
-  // Compose the final format
   return suffix
     ? `${cleanName} - ${size} - ${qty} - ${suffix}`
     : `${cleanName} - ${size} - ${qty}`;
@@ -164,7 +165,7 @@ async function fetchOrderDataFromDatabase(quotationId) {
     const productsWithNumbers = productsResult.rows.map((product, index) => ({
   ...product,
   productNumber: String(index + 1).padStart(3, '0'),
-  FullName: normalizeFullName(product.FullName), // Apply formatting
+FullName: normalizeFullName(product.FullName)
 }));
 
 
