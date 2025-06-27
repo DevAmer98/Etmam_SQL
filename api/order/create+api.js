@@ -144,8 +144,6 @@ router.post('/orders', async (req, res) => {
         return res.status(400).json({ 
           error: `Product ${i + 1} is missing required fields`,
           details: {
-            section: product.section ? 'Valid' : 'Required',
-            type: product.type ? 'Valid' : 'Required',
             quantity: product.quantity ? 'Valid' : 'Required',
             price: product.price ? 'Valid' : 'Required'
           }
@@ -223,7 +221,7 @@ try {
   });
   throw new Error(`Invalid delivery date format: ${dateError.message}`);
 }
-
+ 
         // Generate custom ID
         const customId = await generateCustomId(client);
         // Fetch the max order_number currently in the DB
