@@ -230,9 +230,9 @@ try {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status custom_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null, status, customId]
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number)
+             VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9,$10) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null, status, customId, order_number]
           ),
           10000
         );
