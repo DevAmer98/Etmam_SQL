@@ -237,7 +237,7 @@ const newOrderNumber = maxOrderNumber + 1;
           client.query(
             `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number)
              VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9,$10) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null, status, customId, newOrderNumber]
+            [client_id, username, formattedDate, delivery_type, notes || null, 0, 0, status, customId, newOrderNumber]
           ),
           10000
         );
