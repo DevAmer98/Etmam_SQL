@@ -226,13 +226,18 @@ try {
 
         // Generate custom ID
         const customId = await generateCustomId(client);
+        // Fetch the max order_number currently in the DB
+const { rows } = await client.query('SELECT MAX(order_number) AS max FROM orders');
+const maxOrderNumber = rows[0].max || 0;
+const newOrderNumber = maxOrderNumber + 1;
+
 
         // Insert order
         const orderResult = await withTimeout(
           client.query(
             `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number)
              VALUES ($1, $2, $3, $4, $5, $6, $7,$8,$9,$10) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null, status, customId, order_number]
+            [client_id, username, formattedDate, delivery_type, notes || null, status, customId, newOrderNumber]
           ),
           10000
         );
