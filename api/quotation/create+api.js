@@ -128,11 +128,16 @@ router.post('/quotations', async (req, res) => {
           const formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
           const customId = await generateCustomId(client);
 
+                      // Fetch the max order_number currently in the DB
+const { rows } = await client.query('SELECT MAX(order_number) AS max FROM orders');
+const maxOrderNumber = rows[0].max || 0;
+const newQuotationNumber = maxOrderNumber + 1;
+
       // Insert quotation
     const insertQuery = `
-        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`;
-        const insertParams = [client_id, username, manager_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
+        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13) RETURNING id`;
+        const insertParams = [client_id, username, manager_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 
