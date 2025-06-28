@@ -98,6 +98,9 @@ router.put('/acceptManager/:id', async (req, res) => {
   }
 
   try {
+
+
+    
     const updateOrderQuery = `
       UPDATE orders 
       SET manageraccept = 'accepted',
