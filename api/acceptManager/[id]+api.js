@@ -101,6 +101,7 @@ router.put('/acceptManager/:id', async (req, res) => {
     const updateOrderQuery = `
       UPDATE orders 
       SET manageraccept = 'accepted',
+                manageraccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
     `;

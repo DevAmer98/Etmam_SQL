@@ -161,6 +161,7 @@ router.put('/acceptSupervisorQuotation/:id', async (req, res) => {
     const updateOrderQuery = `
       UPDATE quotations 
       SET supervisoraccept = 'accepted',
+                supervisoraccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
     `;
