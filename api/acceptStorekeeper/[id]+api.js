@@ -102,7 +102,8 @@ router.put('/acceptStorekeeper/:id', async (req, res) => {
     const updateOrderQuery = `
       UPDATE orders 
       SET storekeeperaccept = 'accepted',
-          updated_at = CURRENT_TIMESTAMP
+        storekeeperaccept_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP 
       WHERE id = $1
     `;
     await executeWithRetry(async () => {

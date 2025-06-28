@@ -194,6 +194,7 @@ const client = await pool.connect();
           manageraccept = 'pending',
           manageraccept_at = NULL,
           supervisoraccept_at = NULL,
+          storekeeperaccept_at = NULL,
           updated_at = CURRENT_TIMESTAMP,
           actual_delivery_date = COALESCE($6, actual_delivery_date),
           storekeeper_notes = $7,

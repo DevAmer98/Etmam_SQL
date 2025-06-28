@@ -61,6 +61,49 @@ const generateCustomId = async (client) => {
   return newId;
 };
 
+
+
+// Function to send notifications to supervisors
+async function sendNotificationToManager(message, title = 'Notification') {
+  const client = await pool.connect();
+  try {
+    // Fetch FCM tokens for supervisors
+    const query = 'SELECT fcm_token FROM Managers WHERE role = $1 AND active = TRUE';
+    const result = await client.query(query, ['manager']);
+    const tokens = result.rows.map((row) => row.fcm_token).filter((token) => token != null);
+
+    console.log(`Sending notifications to manager:`, tokens);
+
+    // Check if tokens array is empty
+    if (tokens.length === 0) {
+      console.warn('No FCM tokens found for supervisors. Skipping notification.');
+      return;
+    }
+
+    // Prepare the messages for Firebase
+    const messages = tokens.map((token) => ({
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        role: 'manager', // Add role information to the payload
+      },
+      token,
+    }));
+
+    // Send the notifications
+    const response = await admin.messaging().sendEach(messages);
+    console.log('Successfully sent messages:', response);
+    return response;
+  } catch (error) {
+    console.error('Failed to send FCM messages:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Function to send notifications to supervisors
 async function sendNotificationToSupervisor(message, title = 'Notification') {
   const client = await pool.connect();
@@ -168,7 +211,11 @@ router.post('/orders/salesRep', async (req, res) => {
 
     // Send notifications to supervisors (outside of transaction)
     try {
-      await sendNotificationToSupervisor(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
+     await Promise.all([
+  sendNotificationToSupervisor(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد'),
+  sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد'),
+]);
+
     } catch (notificationError) {
       console.error('Failed to send notification, but order was created successfully:', notificationError);
       // Don't fail the request if notification fails
