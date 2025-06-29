@@ -50,9 +50,7 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
 
     const hasStatus = status !== 'all';
     let filterCondition = `orders.storekeeperaccept = 'accepted'`;
-    if (hasStatus) {
-      filterCondition += ` AND orders.status = $2`;
-    }
+  
 
     // Count query
     const countQuery = `
@@ -70,7 +68,7 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
 
     // Paginated query
     const paginatedFilterCondition = hasStatus
-      ? `orders.storekeeperaccept = 'accepted' AND orders.status = $4`
+      ? `orders.storekeeperaccept = 'accepted'`
       : `orders.storekeeperaccept = 'accepted'`;
 
     const baseQuery = `
