@@ -81,7 +81,7 @@ const orderNumber = orderNumberMatch ? orderNumberMatch[1] : '';
     '{{client_name}}': orderData.client_name,
     '{{company_name}}': orderData.company_name,
     '{{created_at}}': orderData.created_at,
-      '{{order_number}}': orderNumber,
+      '{{custom_id}}': customId,
 
   };
 
