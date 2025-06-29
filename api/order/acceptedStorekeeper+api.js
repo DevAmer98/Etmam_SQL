@@ -1,20 +1,18 @@
 import express from 'express';
-import pkg from 'pg'; // New
-const { Pool } = pkg; // Destructure Pool
+import pkg from 'pg'; 
+const { Pool } = pkg; 
 
 const router = express.Router();
 
-// Create a connection pool instead of new client for each request
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
 router.use(express.json());
 
-// Utility function to retry database operations
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -27,16 +25,12 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Utility function to add timeout to database queries
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
   );
   return Promise.race([promise, timeoutPromise]);
 };
-
-
-
 
 router.get('/orders/storekeeperaccept', async (req, res) => {
   const client = await pool.connect();
@@ -45,31 +39,21 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
     const limit = parseInt(url.searchParams.get('limit') || '10', 10);
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const query = `%${url.searchParams.get('query') || ''}%`;
-    const status = url.searchParams.get('status') || 'all';
     const offset = (page - 1) * limit;
 
-    const hasStatus = status !== 'all';
-    let filterCondition = `orders.storekeeperaccept = 'accepted'`;
-  
-
-    // Count query
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
-      AND ${filterCondition}
+      AND orders.storekeeperaccept = 'accepted'
     `;
-    const countParams = hasStatus ? [query, status] : [query];
+    const countParams = [query];
+
     const countResult = await executeWithRetry(() =>
       client.query(countQuery, countParams)
     );
     const totalCount = parseInt(countResult.rows[0].count, 10);
-
-    // Paginated query
-    const paginatedFilterCondition = hasStatus
-      ? `orders.storekeeperaccept = 'accepted'`
-      : `orders.storekeeperaccept = 'accepted'`;
 
     const baseQuery = `
       SELECT 
@@ -93,13 +77,11 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
-      AND ${paginatedFilterCondition}
+      AND orders.storekeeperaccept = 'accepted'
       ORDER BY orders.created_at DESC
       LIMIT $1 OFFSET $2
     `;
-    const baseParams = hasStatus
-      ? [limit, offset, query, status]
-      : [limit, offset, query];
+    const baseParams = [limit, offset, query];
 
     const ordersResult = await executeWithRetry(() =>
       client.query(baseQuery, baseParams)
@@ -107,7 +89,6 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
 
     const orders = ordersResult.rows;
 
-    // === Attach Delivery Locations ===
     const orderIds = orders.map(order => order.id);
     let locationMap = {};
 
@@ -130,7 +111,6 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
     orders.forEach(order => {
       order.deliveryLocations = locationMap[order.id] || [];
     });
-    // === End Attach Delivery Locations ===
 
     res.status(200).json({
       orders,
@@ -149,6 +129,5 @@ router.get('/orders/storekeeperaccept', async (req, res) => {
     client.release();
   }
 });
-
 
 export default router;
