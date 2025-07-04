@@ -3,7 +3,7 @@ import { neon } from '@neondatabase/serverless';
 
 const router = express.Router();
 
-// Utility function to retry database operations
+// Utility: Retry DB operations with backoff
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -16,7 +16,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Utility function to add timeout to database queries
+// Utility: Add timeout to DB queries
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
@@ -24,13 +24,11 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-
-
 router.get('/clients', async (req, res) => {
   try {
-    const sql = neon(`${process.env.DATABASE_URL}`);
+    const sql = neon(process.env.DATABASE_URL);
 
-    // Parse pagination & filters
+    // Parse pagination & filters from query
     const limit = parseInt(req.query.limit || '10', 10);
     const page = parseInt(req.query.page || '1', 10);
     const searchQuery = req.query.search || '';
@@ -43,32 +41,31 @@ router.get('/clients', async (req, res) => {
     const offset = (page - 1) * limit;
 
     // Fetch paginated clients for this username
-    const clients = await executeWithRetry(async () => {
-      return await withTimeout(
-    sql`
-  SELECT * FROM clients
-  WHERE clients.username ILIKE ${'%' + username + '%'}
-  AND client_name ILIKE ${'%' + searchQuery + '%'}
+    const clients = await executeWithRetry(() =>
+      withTimeout(
+        sql`
+          SELECT * FROM clients
+          WHERE LOWER(TRIM(clients.username)) = LOWER(TRIM(${username}))
+          AND client_name ILIKE ${'%' + searchQuery + '%'}
           ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
         `,
         10000
-      );
-    });
+      )
+    );
 
-    // Fetch total count for pagination metadata
-    const totalClients = await executeWithRetry(async () => {
-      return await withTimeout(
-      sql`
-  SELECT COUNT(*) AS count FROM clients
-  WHERE clients.username ILIKE ${'%' + username + '%'}
-  AND client_name ILIKE ${'%' + searchQuery + '%'};
-`
-,
+    // Fetch total count for pagination
+    const totalClients = await executeWithRetry(() =>
+      withTimeout(
+        sql`
+          SELECT COUNT(*) AS count FROM clients
+          WHERE LOWER(TRIM(clients.username)) = LOWER(TRIM(${username}))
+          AND client_name ILIKE ${'%' + searchQuery + '%'};
+        `,
         10000
-      );
-    });
+      )
+    );
 
     const total = parseInt(totalClients[0]?.count || '0', 10);
     const totalPages = Math.ceil(total / limit);
