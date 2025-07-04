@@ -42,6 +42,8 @@ import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
 import allClientsApi from './api/client/all+api.js'; 
 import orderPerClientApi from './api/client/[id]/order+api.js'
+import salesRepClientsApi from './api/client/salesRep+api.js'
+
 
 
 
@@ -89,6 +91,8 @@ app.use('/api', singleStorekeeperApi);
 app.use('/api', singleSupervisorApi);
 app.use('/api', allClientsApi);
 app.use('/api', orderPerClientApi);
+app.use('/api', salesRepClientsApi);
+
 
 
 
