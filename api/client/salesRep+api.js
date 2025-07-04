@@ -45,10 +45,10 @@ router.get('/clients', async (req, res) => {
     // Fetch paginated clients for this username
     const clients = await executeWithRetry(async () => {
       return await withTimeout(
-        sql`
-          SELECT * FROM clients
-          WHERE clients.username = ${username}
-          AND client_name ILIKE ${'%' + searchQuery + '%'}
+    sql`
+  SELECT * FROM clients
+  WHERE clients.username ILIKE ${'%' + username + '%'}
+  AND client_name ILIKE ${'%' + searchQuery + '%'}
           ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
@@ -60,11 +60,12 @@ router.get('/clients', async (req, res) => {
     // Fetch total count for pagination metadata
     const totalClients = await executeWithRetry(async () => {
       return await withTimeout(
-        sql`
-          SELECT COUNT(*) AS count FROM clients
-          WHERE clients.username = ${username}
-          AND client_name ILIKE ${'%' + searchQuery + '%'};
-        `,
+      sql`
+  SELECT COUNT(*) AS count FROM clients
+  WHERE clients.username ILIKE ${'%' + username + '%'}
+  AND client_name ILIKE ${'%' + searchQuery + '%'};
+`
+,
         10000
       );
     });
