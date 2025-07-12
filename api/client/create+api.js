@@ -14,7 +14,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
     }
     throw error;
   }
-};
+}; 
 
 // Utility function to add timeout to database queries
 const withTimeout = (promise, timeout) => {
@@ -61,8 +61,7 @@ router.post('/clients', async (req, res) => {
      // 🚫 Check for existing client with same phone number or client_name in the same company
     const existingClient = await sql`
       SELECT * FROM clients 
-      WHERE phone_number = ${phone_number} 
-         OR (client_name = ${client_name} AND company_name = ${company_name})
+      WHERE (client_name = ${client_name} AND company_name = ${company_name})
       LIMIT 1;
     `;
 
