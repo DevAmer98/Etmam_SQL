@@ -50,7 +50,7 @@ router.get('/orders/supervisorAccept', async (req, res) => {
     const hasStatus = status !== 'all';
 
     // Filter condition shared across both queries
-    let filterCondition = `orders.supervisoraccept = 'accepted'`;
+    let filterCondition = `orders.supervisoraccept = 'accepted' AND orders.manageraccept = 'accepted'`;
     if (hasStatus) {
       filterCondition += ` AND orders.storekeeperaccept = $2`;
     }
@@ -70,9 +70,10 @@ router.get('/orders/supervisorAccept', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0].count, 10);
 
     // Paginated query
-    const paginatedFilterCondition = hasStatus
-      ? `orders.supervisoraccept = 'accepted' AND orders.storekeeperaccept = $4`
-      : `orders.supervisoraccept = 'accepted'`;
+      const paginatedFilterCondition = hasStatus
+      ? `orders.supervisoraccept = 'accepted' AND orders.manageraccept = 'accepted' AND orders.storekeeperaccept = $4`
+      : `orders.supervisoraccept = 'accepted' AND orders.manageraccept = 'accepted'`;
+
 
     const baseQuery = `
       SELECT 
