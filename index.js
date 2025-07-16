@@ -44,6 +44,7 @@ import allClientsApi from './api/client/all+api.js';
 import orderPerClientApi from './api/client/[id]/order+api.js'
 import salesRepClientsApi from './api/client/salesRep+api.js'
 import pendingOrdersCountApi from './api/order/pending.js';
+import pendingQuotationsCountApi from './api/quotation/pending.js';
 
 
 
@@ -94,6 +95,8 @@ app.use('/api', allClientsApi);
 app.use('/api', orderPerClientApi);
 app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
+app.use('/api', pendingQuotationsCountApi);
+
 
 
 

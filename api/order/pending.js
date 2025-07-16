@@ -1,6 +1,4 @@
 import express from 'express';
-import moment from 'moment-timezone';
-import admin from '../../firebase-init.js';
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -40,7 +38,6 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
 router.get('/orders/manager/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-    const query = `%${req.query.query || ''}%`;
 
     const countQuery = `
       SELECT COUNT(*) AS count
@@ -67,7 +64,6 @@ const result = await client.query(countQuery);
 router.get('/orders/supervisor/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-    const query = `%${req.query.query || ''}%`;
 
     const countQuery = `
       SELECT COUNT(*) AS count
@@ -95,7 +91,6 @@ const result = await client.query(countQuery);
 router.get('/orders/storekeeper/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-    const query = `%${req.query.query || ''}%`;
 
     const countQuery = `
       SELECT COUNT(*) AS count
