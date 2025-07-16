@@ -412,6 +412,33 @@ router.get('/orders', async (req, res) => {
     client.release();
   }
 });
+ 
+
+router.get('/orders/pending-count', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const query = `%${req.query.query || ''}%`;
+
+    const countQuery = `
+      SELECT COUNT(*) AS count
+      FROM orders
+      JOIN clients ON orders.client_id = clients.id
+      WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
+      AND (orders.status = 'pending' OR orders.manageraccept = 'pending')
+    `;
+
+    const result = await client.query(countQuery, [query]);
+    const count = parseInt(result.rows[0].count, 10);
+
+    res.status(200).json({ pendingOrdersCount: count });
+  } catch (error) {
+    console.error('Error fetching pending orders count:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
 
 
 router.get('/orders/supervisor', async (req, res) => {
