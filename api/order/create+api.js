@@ -423,8 +423,7 @@ router.get('/orders/pending-count', async (req, res) => {
       SELECT COUNT(*) AS count
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
-      AND (orders.status = 'pending' OR orders.manageraccept = 'pending')
+      WHERE orders.manageraccept = 'pending'
     `;
 
     const result = await client.query(countQuery, [query]);
