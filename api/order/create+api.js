@@ -426,7 +426,7 @@ router.get('/orders/pending-count', async (req, res) => {
       WHERE orders.manageraccept = 'pending'
     `;
 
-    const result = await client.query(countQuery, [query]);
+const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingOrdersCount: count });
