@@ -43,6 +43,7 @@ import ordersupervisorApi from './api/order/supervisor+api.js';
 import allClientsApi from './api/client/all+api.js'; 
 import orderPerClientApi from './api/client/[id]/order+api.js'
 import salesRepClientsApi from './api/client/salesRep+api.js'
+import pendingOrdersCountApi from './api/order/pending.js';
 
 
 
@@ -92,6 +93,7 @@ app.use('/api', singleSupervisorApi);
 app.use('/api', allClientsApi);
 app.use('/api', orderPerClientApi);
 app.use('/api', salesRepClientsApi);
+app.use('/api', pendingOrdersCountApi);
 
 
 
