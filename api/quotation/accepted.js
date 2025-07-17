@@ -35,12 +35,12 @@ router.get('/quotations/accepted-count', async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM quotations
-      JOIN clients ON orders.client_id = clients.id
+      JOIN clients ON quotations.client_id = clients.id
       WHERE (quotations.manageraccept = 'accepted' AND quotations.supervisoraccept = 'accepted')
     `;
 
 const result = await client.query(countQuery);
-    const count = parseInt(result.rows[0].count, 10);
+    const count = parseInt(result.rows[0].count, 10); 
 
     res.status(200).json({ acceptedQuotationsCount: count });
   } catch (error) {
