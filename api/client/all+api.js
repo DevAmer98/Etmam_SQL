@@ -121,12 +121,15 @@ router.get('/allClients', async (req, res) => {
       return await withTimeout(
         sql`
           SELECT * FROM clients
-          WHERE client_name ILIKE ${'%' + searchQuery + '%'}
+          WHERE   WHERE clients.username = ${username} AND (
+    client_name ILIKE ${'%' + searchQuery + '%'} OR
+    company_name ILIKE ${'%' + searchQuery + '%'}
+  )
           ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
         `,
-        10000 // 10-second timeout
+        10000 // 10-second timeout 
       );
     });
 
@@ -135,8 +138,10 @@ router.get('/allClients', async (req, res) => {
       return await withTimeout(
         sql`
           SELECT COUNT(*) AS count FROM clients
-          WHERE client_name ILIKE ${'%' + searchQuery + '%'};
-        `,
+  WHERE clients.username = ${username} AND (
+    client_name ILIKE ${'%' + searchQuery + '%'} OR
+    company_name ILIKE ${'%' + searchQuery + '%'}
+  )        `,
         10000 // 10-second timeout
       );
     });
