@@ -114,7 +114,8 @@ router.post('/clients', async (req, res) => {
   }
 });
 
-// GET /api/clients
+
+
 router.get('/clients', async (req, res) => {
   try {
     const sql = neon(`${process.env.DATABASE_URL}`);
@@ -134,9 +135,10 @@ router.get('/clients', async (req, res) => {
       return await withTimeout(
         sql`
           SELECT * FROM clients
-          WHERE clients.username = ${username} AND 
-client_name ILIKE ${'%' + searchQuery + '%'}
-    OR company_name ILIKE ${'%' + searchQuery + '%'}         
+     WHERE clients.username = ${username} AND (
+    client_name ILIKE ${'%' + searchQuery + '%'} OR
+    company_name ILIKE ${'%' + searchQuery + '%'}
+  )
      ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
@@ -150,9 +152,12 @@ client_name ILIKE ${'%' + searchQuery + '%'}
       return await withTimeout(
         sql`
           SELECT COUNT(*) AS count FROM clients
-          WHERE clients.username = ${username} AND
-client_name ILIKE ${'%' + searchQuery + '%'}
-    OR company_name ILIKE ${'%' + searchQuery + '%'} `,
+          WHERE clients.username = ${username} AND (
+    client_name ILIKE ${'%' + searchQuery + '%'} OR
+    company_name ILIKE ${'%' + searchQuery + '%'}
+  )`,
+
+
         10000 // 10-second timeout
       );
     });
