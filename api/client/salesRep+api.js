@@ -46,7 +46,7 @@ router.get('/clients', async (req, res) => {
         sql`
           SELECT * FROM clients
           WHERE LOWER(TRIM(clients.username)) = LOWER(TRIM(${username}))
-          AND client_name ILIKE ${'%' + searchQuery + '%'}
+          AND client_name ILIKE ${'%' + searchQuery + '%'} OR company_name ILIKE ${'%' + searchQuery + '%'} 
           ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
@@ -61,8 +61,7 @@ router.get('/clients', async (req, res) => {
         sql`
           SELECT COUNT(*) AS count FROM clients
           WHERE LOWER(TRIM(clients.username)) = LOWER(TRIM(${username}))
-          AND client_name ILIKE ${'%' + searchQuery + '%'};
-        `,
+          AND client_name ILIKE ${'%' + searchQuery + '%'} OR company_name ILIKE ${'%' + searchQuery + '%'}`,
         10000
       )
     );

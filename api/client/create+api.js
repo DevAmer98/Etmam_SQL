@@ -135,8 +135,9 @@ router.get('/clients', async (req, res) => {
         sql`
           SELECT * FROM clients
           WHERE clients.username = ${username} AND 
-          client_name ILIKE ${'%' + searchQuery + '%'}
-          ORDER BY client_name
+client_name ILIKE ${'%' + searchQuery + '%'}
+    OR company_name ILIKE ${'%' + searchQuery + '%'}         
+     ORDER BY client_name
           LIMIT ${limit}
           OFFSET ${offset};
         `,
@@ -150,8 +151,8 @@ router.get('/clients', async (req, res) => {
         sql`
           SELECT COUNT(*) AS count FROM clients
           WHERE clients.username = ${username} AND
-           client_name ILIKE ${'%' + searchQuery + '%'};
-        `,
+client_name ILIKE ${'%' + searchQuery + '%'}
+    OR company_name ILIKE ${'%' + searchQuery + '%'} `,
         10000 // 10-second timeout
       );
     });
