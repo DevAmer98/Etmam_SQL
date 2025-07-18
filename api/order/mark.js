@@ -1,19 +1,18 @@
 import express from 'express';
 import admin from '../../firebase-init.js';
-import pkg from 'pg'; // New
-const { Pool } = pkg; // Destructure Pool
+import pkg from 'pg';
+const { Pool } = pkg;
 
 const router = express.Router();
 
-// Initialize PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
-// Utility function to retry database operations
+// Utility: Retry DB operations
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -26,7 +25,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Utility function to add timeout to database queries
+// Utility: Add timeout to DB queries
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
@@ -34,30 +33,36 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-// Test database connection
+// Test DB connection
 async function testConnection() {
   try {
-    const res = await executeWithRetry(async () => {
-      return await withTimeout(pool.query('SELECT 1 AS test'), 5000); // 5-second timeout
-    });
-    console.log('Database connection successful:', res.rows);
+    const res = await executeWithRetry(() =>
+      withTimeout(pool.query('SELECT 1 AS test'), 5000)
+    );
+    console.log('✅ Database connection successful:', res.rows);
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error('❌ Database connection error:', error);
   }
 }
-
 testConnection();
 
+// 🚀 PUT /mark/:id
 router.put('/mark/:id', async (req, res) => {
+  console.log('📥 PUT /mark/:id called');
+  console.log('🧾 Params:', req.params);
+  console.log('🧾 Body:', req.body);
+
   const { id } = req.params;
   const { mark } = req.body;
 
   if (!id) {
+    console.warn('⚠️ Missing order ID in request');
     return res.status(400).json({ error: 'Missing order ID' });
   }
 
   if (!['done', 'pending'].includes(mark)) {
-    return res.status(400).json({ error: 'Invalid mark value' });
+    console.warn('⚠️ Invalid mark value received:', mark);
+    return res.status(400).json({ error: 'Invalid mark value', received: mark });
   }
 
   try {
@@ -69,11 +74,21 @@ router.put('/mark/:id', async (req, res) => {
       WHERE id = $2
     `;
 
-    await executeWithRetry(() => withTimeout(pool.query(updateOrderQuery, [mark, id]), 10000));
+    console.log('📝 Executing query with values:', [mark, id]);
+    const result = await executeWithRetry(() =>
+      withTimeout(pool.query(updateOrderQuery, [mark, id]), 10000)
+    );
+
+    console.log('✅ Update successful. Rows affected:', result.rowCount);
+
+    if (result.rowCount === 0) {
+      console.warn('⚠️ Order not found for ID:', id);
+      return res.status(404).json({ error: 'Order not found' });
+    }
 
     return res.status(200).json({ message: `Order marked as ${mark} successfully` });
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('🔥 Database error during update:', error);
     return res.status(500).json({
       error: 'Internal Server Error',
       details: error.message,
