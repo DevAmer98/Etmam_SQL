@@ -70,6 +70,7 @@ app.use('/api', clientApi);
 app.use('/api', orderApi);
 app.use('/api', quotationApi);
 app.use('/api/order', supervisorAcceptOrderApi); // Mount under /api/order
+app.use('/api', ordersForAccountantApi); 
 app.use('/api/order', storekeeperAcceptOrderApi);
 app.use('/api/order', salesOrderApi);
 app.use('/api', ordersupervisorApi); // Use your new router
@@ -102,7 +103,6 @@ app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
 app.use('/api', pendingQuotationsCountApi);
 app.use('/api', markOrderAsDoneApi);
-app.use('/api', ordersForAccountantApi); 
 
 
 
