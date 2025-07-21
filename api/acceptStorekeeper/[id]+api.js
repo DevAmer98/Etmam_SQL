@@ -47,7 +47,7 @@ async function testConnection() {
 }
 
 testConnection();
-
+ 
 // Function to send notifications to drivers
 async function sendNotificationToDriver(message, title = 'Notification') {
   const client = await pool.connect();
@@ -91,6 +91,52 @@ async function sendNotificationToDriver(message, title = 'Notification') {
   }
 }
 
+
+
+
+async function sendNotificationToAccountant(message, title = 'Notification') {
+  const client = await pool.connect();
+  try {
+    // Fetch FCM tokens for drivers
+    const query = 'SELECT fcm_token FROM Accountants WHERE role = $1 AND active = TRUE';
+    const result = await executeWithRetry(async () => {
+      return await withTimeout(client.query(query, ['accountant']), 10000); // 10-second timeout
+    });
+    const tokens = result.rows.map((row) => row.fcm_token).filter((token) => token != null);
+
+    console.log(`Sending notifications to accountants:`, tokens);
+
+    // Check if tokens array is empty
+    if (tokens.length === 0) {
+      console.warn('No FCM tokens found for drivers. Skipping notification.');
+      return;
+    }
+
+    // Prepare the messages for Firebase
+    const messages = tokens.map((token) => ({
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        role: 'accountant', // Add role information to the payload
+      },
+      token,
+    }));
+
+    // Send the notifications
+    const response = await admin.messaging().sendEach(messages);
+    console.log('Successfully sent messages:', response);
+    return response;
+  } catch (error) {
+    console.error('Failed to send FCM messages:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
 router.put('/acceptStorekeeper/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -113,6 +159,12 @@ router.put('/acceptStorekeeper/:id', async (req, res) => {
     await sendNotificationToDriver(
       `تم قبول الطلب ${id} من قبل أمين المخزن.`,
       'الطلب جاهز للتوصيل'
+    );
+
+
+    await sendNotificationToAccountant(
+      `تم قبول الطلب ${id} من قبل أمين المخزن.`,
+      'الطلب جاهز لاصدار الفاتورة'
     );
 
     return res.status(200).json({ message: 'Order accepted successfully' });
