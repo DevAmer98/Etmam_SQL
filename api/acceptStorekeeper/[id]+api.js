@@ -161,12 +161,12 @@ router.put('/acceptStorekeeper/:id', async (req, res) => {
       'الطلب جاهز للتوصيل'
     );
 
-
+/*
     await sendNotificationToAccountant(
       `تم قبول الطلب ${id} من قبل أمين المخزن.`,
       'الطلب جاهز لاصدار الفاتورة'
     );
-
+*/
     return res.status(200).json({ message: 'Order accepted successfully' });
   } catch (error) {
     console.error('Database error:', error);
