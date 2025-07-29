@@ -60,9 +60,9 @@ router.post('/clients', async (req, res) => {
 
      // 🚫 Check for existing client with same phone number or client_name in the same company
     const existingClient = await sql`
-      SELECT * FROM clients 
-      WHERE (client_name = ${client_name} AND company_name = ${company_name})
-      LIMIT 1;
+     SELECT 1 FROM clients 
+WHERE company_name = ${company_name}
+LIMIT 1;
     `;
 
     if (existingClient.length > 0) {
