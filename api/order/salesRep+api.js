@@ -265,10 +265,11 @@ router.get('/orders/salesRep', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
+        clients.username AS client_added_by,
         orders.status,
         orders.storekeeperaccept,
         orders.actual_delivery_date,
-        orders.total_price,
+        orders.total_price, 
         orders.total_vat, 
         orders.order_number,
         orders.total_subtotal 
