@@ -277,6 +277,49 @@ router.put('/quotations/:id', async (req, res) => {
 });
 
 
+// PUT /api/quotations/:id/export
+router.put('/quotations/:id/export', async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ error: 'Missing quotation ID' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const updateQuery = `
+      UPDATE quotations
+      SET exported = 'TRUE',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, exported;
+    `;
+
+    const result = await executeWithRetry(async () => {
+      return await withTimeout(client.query(updateQuery, [id]), 10000);
+    });
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    return res.status(200).json({
+      message: 'Quotation marked as exported',
+      quotation: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating exported column:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
 
 
 
