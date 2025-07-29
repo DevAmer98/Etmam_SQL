@@ -90,6 +90,7 @@ app.use('/api', acceptedManagerQoutationApi);
 app.use('/api', deliverdApi);
 app.use('/api', notDeliverdApi);
 app.use('/api', acceptedQuotationsCountApi);
+app.use('/api', quotationsExportedCount);
 app.use('/api', singleQuotationApi);
 app.use('/api', singleManagerApi);
 app.use('/api', singleAccountantApi);
@@ -105,7 +106,6 @@ app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
 app.use('/api', pendingQuotationsCountApi);
 app.use('/api', markOrderAsDoneApi);
-app.use('/api', quotationsExportedCount);
 
 
 
