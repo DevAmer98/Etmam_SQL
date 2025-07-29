@@ -240,19 +240,20 @@ router.post('/orders/salesRep', async (req, res) => {
     client.release();
   }
 });
- 
-// GET endpoint to fetch orders
-router.get('/orders/salesRep', async (req, res) => {
+
+
+ router.get('/orders/salesRep', async (req, res) => {
   const client = await pool.connect();
   try {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
     const query = req.query.query || '';
     const username = req.query.username || '';
-
+    const filter = req.query.filter || 'all';
     const offset = (page - 1) * limit;
 
-    const baseQuery = `
+    // Base query
+    let baseQuery = `
       SELECT  
         orders.*, 
         clients.client_name AS client_name,
@@ -275,27 +276,38 @@ router.get('/orders/salesRep', async (req, res) => {
         orders.total_subtotal 
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE clients.username = $4 AND 
-            (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
-      ORDER BY orders.created_at DESC
-      LIMIT $1 OFFSET $2
+      WHERE clients.username = $4 
+        AND (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
     `;
 
-    const countQuery = `
+    // Count query
+    let countQuery = `
       SELECT COUNT(*) AS total
       FROM orders
       JOIN clients ON orders.client_id = clients.id
-      WHERE clients.username = $2 AND 
-            (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
+      WHERE clients.username = $2 
+        AND (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
+
+    // Apply filters
+    if (filter === 'accepted') {
+      baseQuery += ` AND orders.manageraccept = 'accepted' AND orders.supervisoraccept = 'accepted'`;
+      countQuery += ` AND orders.manageraccept = 'accepted' AND orders.supervisoraccept = 'accepted'`;
+    } else if (filter === 'pending') {
+      baseQuery += ` AND (orders.manageraccept = 'pending' OR orders.supervisoraccept = 'pending')`;
+      countQuery += ` AND (orders.manageraccept = 'pending' OR orders.supervisoraccept = 'pending')`;
+    }
+
+    // Final ordering and pagination
+    baseQuery += ` ORDER BY orders.created_at DESC LIMIT $1 OFFSET $2`;
 
     const baseQueryParams = [limit, offset, `%${query}%`, username];
     const countQueryParams = [`%${query}%`, username];
 
     const [ordersResult, countResult] = await executeWithRetry(async () => {
       return await Promise.all([
-        withTimeout(client.query(baseQuery, baseQueryParams), 10000), // 10-second timeout
-        withTimeout(client.query(countQuery, countQueryParams), 10000), // 10-second timeout
+        withTimeout(client.query(baseQuery, baseQueryParams), 10000),
+        withTimeout(client.query(countQuery, countQueryParams), 10000),
       ]);
     });
 
@@ -303,32 +315,29 @@ router.get('/orders/salesRep', async (req, res) => {
     const totalCount = parseInt(countResult.rows[0]?.total || 0, 10);
     const hasMore = page * limit < totalCount;
 
-
+    // Attach delivery locations
     const orderIds = orders.map(order => order.id);
+    let locationMap = {};
 
-let locationMap = {};
-if (orderIds.length > 0) {
-  const locationQuery = `
-    SELECT order_id, name, url
-    FROM order_locations
-    WHERE order_id = ANY($1)
-  `;
-  const locationResult = await client.query(locationQuery, [orderIds]);
+    if (orderIds.length > 0) {
+      const locationQuery = `
+        SELECT order_id, name, url
+        FROM order_locations
+        WHERE order_id = ANY($1)
+      `;
+      const locationResult = await client.query(locationQuery, [orderIds]);
 
-  // Group locations by order_id
-  locationResult.rows.forEach(loc => {
-    if (!locationMap[loc.order_id]) {
-      locationMap[loc.order_id] = [];
+      locationResult.rows.forEach(loc => {
+        if (!locationMap[loc.order_id]) {
+          locationMap[loc.order_id] = [];
+        }
+        locationMap[loc.order_id].push({ name: loc.name, url: loc.url });
+      });
     }
-    locationMap[loc.order_id].push({ name: loc.name, url: loc.url });
-  });
-}
 
-// Attach locations to each order
-orders.forEach(order => {
-  order.deliveryLocations = locationMap[order.id] || [];
-});
-
+    orders.forEach(order => {
+      order.deliveryLocations = locationMap[order.id] || [];
+    });
 
     return res.status(200).json({
       orders,
@@ -347,6 +356,7 @@ orders.forEach(order => {
     client.release();
   }
 });
+
 
 export default router;
  
