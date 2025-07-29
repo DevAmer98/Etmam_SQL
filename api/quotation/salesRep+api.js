@@ -79,7 +79,7 @@ async function sendNotificationToManager(message, title = 'Notification') {
       },
       token,
     }));
-
+ 
     // Send the notifications
     const response = await admin.messaging().sendEach(messages);
     console.log('Successfully sent messages:', response);
@@ -218,12 +218,11 @@ router.get('/quotations/salesRep', async (req, res) => {
     const page = Math.max(parseInt(req.query.page || '1', 10), 1);
     const query = req.query.query || '';
     const username = req.query.username || '';
-
+    const filter = req.query.filter || 'all';
     const offset = (page - 1) * limit;
 
-    
-
-    const baseQuery = `
+    // ✅ Make baseQuery and countQuery mutable (let, not const)
+    let baseQuery = `
       SELECT 
         quotations.*, 
         clients.client_name AS client_name,
@@ -236,6 +235,7 @@ router.get('/quotations/salesRep', async (req, res) => {
         clients.street AS client_street,
         clients.city AS client_city,
         clients.region AS client_region, 
+        clients.username AS client_added_by,
         quotations.status,
         quotations.storekeeperaccept,
         quotations.actual_delivery_date,
@@ -244,27 +244,35 @@ router.get('/quotations/salesRep', async (req, res) => {
         quotations.total_subtotal
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
-      WHERE clients.username = $4 AND 
-            (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
-ORDER BY quotations.created_at DESC
-      LIMIT $1 OFFSET $2
+      WHERE clients.username = $4
+        AND (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
     `;
 
-    const countQuery = `
+    if (filter === 'ready') {
+      baseQuery += ` AND quotations.ready = TRUE`;
+    }
+
+    baseQuery += ` ORDER BY quotations.created_at DESC LIMIT $1 OFFSET $2`;
+
+    let countQuery = `
       SELECT COUNT(*) AS total
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
-      WHERE clients.username = $2 AND 
-            (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
+      WHERE clients.username = $2
+        AND (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
     `;
+
+    if (filter === 'ready') {
+      countQuery += ` AND quotations.ready = TRUE`;
+    }
 
     const baseQueryParams = [limit, offset, `%${query}%`, username];
     const countQueryParams = [`%${query}%`, username];
 
     const [quotationsResult, countResult] = await executeWithRetry(async () => {
       return await Promise.all([
-        withTimeout(client.query(baseQuery, baseQueryParams), 10000), // 10-second timeout
-        withTimeout(client.query(countQuery, countQueryParams), 10000), // 10-second timeout
+        withTimeout(client.query(baseQuery, baseQueryParams), 10000),
+        withTimeout(client.query(countQuery, countQueryParams), 10000),
       ]);
     });
 
@@ -289,5 +297,6 @@ ORDER BY quotations.created_at DESC
     client.release();
   }
 });
+
 
 export default router;
