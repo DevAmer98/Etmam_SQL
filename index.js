@@ -48,6 +48,8 @@ import pendingQuotationsCountApi from './api/quotation/pending.js';
 import acceptedQuotationsCountApi from './api/quotation/accepted.js';
 import markOrderAsDoneApi from './api/order/mark.js';
 import ordersForAccountantApi from './api/order/forAccountant.js';
+import quotationsExportedCount from './api/quotation/exported/route.js';
+
 
 
 
@@ -103,6 +105,7 @@ app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
 app.use('/api', pendingQuotationsCountApi);
 app.use('/api', markOrderAsDoneApi);
+app.use('/api', quotationsExportedCount);
 
 
 
