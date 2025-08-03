@@ -1,57 +1,51 @@
 import express from 'express';
-import pkg from 'pg'; // Import the default export
-const { Pool } = pkg; // Destructure Pool from the default export
+import { Pool } from 'pg';
 
 const router = express.Router();
 
-// Initialize PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
-// Utility function to retry database operations
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
-  } catch (error) {
+  } catch (err) {
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return executeWithRetry(fn, retries - 1, delay * 2);
     }
-    throw error;
+    throw err;
   }
 };
 
-// Utility function to add timeout to database queries
 const withTimeout = (promise, timeout) => {
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Database query timed out')), timeout)
-  );
-  return Promise.race([promise, timeoutPromise]);
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Database query timed out')), timeout)
+    ),
+  ]);
 };
 
-// Connect to the database
-async function connectToDatabase() {
+const connectToDatabase = async () => {
   try {
-    const client = await executeWithRetry(async () => {
-      return await withTimeout(pool.connect(), 5000); // 5-second timeout
-    });
-    console.log('Database connected');
+    const client = await executeWithRetry(() => withTimeout(pool.connect(), 5000));
+    console.log('✅ Database connected');
     return client;
   } catch (err) {
-    console.error('Failed to connect to database:', err);
+    console.error('❌ Database connection failed:', err);
     throw new Error('Database connection failed');
   }
-}
+};
 
-// Function to delete a Clerk user
-async function deleteClerkUser(clerkId) {
+const deleteClerkUser = async (clerkId) => {
   try {
-    const response = await executeWithRetry(async () => {
-      return await withTimeout(
+    const response = await executeWithRetry(() =>
+      withTimeout(
         fetch(`https://api.clerk.dev/v1/users/${clerkId}`, {
           method: 'DELETE',
           headers: {
@@ -59,118 +53,99 @@ async function deleteClerkUser(clerkId) {
             'Clerk-Backend-API-Version': '2023-05-12',
           },
         }),
-        10000 // 10-second timeout
-      );
-    });
+        10000
+      )
+    );
 
     if (!response.ok) {
-      throw new Error('Failed to delete user from Clerk.');
+      throw new Error('Failed to delete Clerk user');
     }
-  } catch (error) {
-    console.error('Error deleting Clerk user:', error);
-    throw error;
+  } catch (err) {
+    console.error('Error deleting Clerk user:', err);
+    throw err;
   }
-}
+};
 
+// GET Accountant by ID
 router.get('/accountants/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ success: false, message: 'Missing accountant ID' });
+
   const client = await connectToDatabase();
   try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'Accountant ID is required' });
-    }
-
-    // Query the supervisor by ID
-    const query = 'SELECT * FROM accountants WHERE id = $1';
-    const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(query, [id]), 10000); // 10-second timeout
-    });
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query('SELECT * FROM accountants WHERE id = $1', [id]), 10000)
+    );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, accountant: 'Accountant not found' });
+      return res.status(404).json({ success: false, message: 'Accountant not found' });
     }
 
     return res.status(200).json({ success: true, accountant: result.rows[0] });
-  } catch (error) {
-    console.error('Error fetching Accountant:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Error fetching accountant details',
-    });
+  } catch (err) {
+    console.error('Fetch error:', err);
+    return res.status(500).json({ success: false, message: err.message });
   } finally {
     client.release();
   }
 });
 
+// DELETE Accountant
 router.delete('/accountants/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ success: false, message: 'Missing accountant ID' });
+
   const client = await connectToDatabase();
   try {
-    const { id } = req.params;
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query('SELECT clerk_id FROM accountants WHERE id = $1', [id]), 10000)
+    );
 
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'Accountant ID is required' });
-    }
-
-    // Fetch the Clerk ID before deletion
-    const accountantQuery = 'SELECT clerk_id FROM accountants WHERE id = $1';
-    const accountantResult = await executeWithRetry(async () => {
-      return await withTimeout(client.query(accountantQuery, [id]), 10000); // 10-second timeout
-    });
-
-    if (accountantResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Accountant not found' });
     }
 
-    const { clerk_id } = supervisorResult.rows[0];
+    const { clerk_id } = result.rows[0];
 
-    const deleteQuery = 'DELETE FROM accountants WHERE id = $1';
-    await executeWithRetry(async () => {
-      return await withTimeout(client.query(deleteQuery, [id]), 10000); // 10-second timeout
-    });
+    await executeWithRetry(() =>
+      withTimeout(client.query('DELETE FROM accountants WHERE id = $1', [id]), 10000)
+    );
 
-    // Delete the supervisor from Clerk
     await deleteClerkUser(clerk_id);
 
     return res.status(200).json({ success: true, message: 'Accountant deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting Accountant:', error);
-    return res.status(500).json({ success: false, message: error.message });
+  } catch (err) {
+    console.error('Delete error:', err);
+    return res.status(500).json({ success: false, message: err.message });
   } finally {
     client.release();
   }
 });
 
-// PUT /api/supervisors/:id
+// UPDATE Accountant
 router.put('/accountants/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, phone, role } = req.body;
+
+  if (!id || !name || !email || !phone || !role) {
+    return res.status(400).json({ success: false, message: 'Missing required fields' });
+  }
+
   const client = await connectToDatabase();
   try {
-    const { id } = req.params;
-    const { name, email, phone, role } = req.body;
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query('SELECT clerk_id FROM accountants WHERE id = $1', [id]), 10000)
+    );
 
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'Accountant ID is required' });
-    }
-
-    if (!name || !email || !phone || !role) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
-    }
-
-    // Fetch the Clerk ID from the database
-    const fetchClerkIdQuery = 'SELECT clerk_id FROM accountants WHERE id = $1';
-    const fetchResult = await executeWithRetry(async () => {
-      return await withTimeout(client.query(fetchClerkIdQuery, [id]), 10000); // 10-second timeout
-    });
-
-    if (fetchResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Accountant not found' });
     }
 
-    const { clerk_id } = fetchResult.rows[0];
+    const { clerk_id } = result.rows[0];
 
     // Update Clerk user
-    const clerkUpdateResponse = await executeWithRetry(async () => {
-      return await withTimeout(
+    const clerkResponse = await executeWithRetry(() =>
+      withTimeout(
         fetch(`https://api.clerk.dev/v1/users/${clerk_id}`, {
           method: 'PATCH',
           headers: {
@@ -184,39 +159,35 @@ router.put('/accountants/:id', async (req, res) => {
             public_metadata: { phone, role },
           }),
         }),
-        10000 // 10-second timeout
-      );
-    });
+        10000
+      )
+    );
 
-    if (!clerkUpdateResponse.ok) {
-      const errorData = await clerkUpdateResponse.json();
-      console.error('Error updating Clerk user:', errorData);
-      throw new Error('Failed to update Accountant in Clerk');
+    if (!clerkResponse.ok) {
+      const errorData = await clerkResponse.json();
+      console.error('Clerk update error:', errorData);
+      throw new Error('Failed to update Clerk user');
     }
 
-    // Update supervisor in the database
-    const updateQuery = `
-      UPDATE accountants
-      SET name = $1, email = $2, phone = $3, role = $4
-      WHERE id = $5
-      RETURNING id, name, email, phone, role
-    `;
-    const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(updateQuery, [name, email, phone, role, id]), 10000); // 10-second timeout
-    });
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Accountant not found' });
-    }
+    // Update DB
+    const updateResult = await executeWithRetry(() =>
+      withTimeout(
+        client.query(
+          `UPDATE accountants SET name = $1, email = $2, phone = $3, role = $4 WHERE id = $5 RETURNING id, name, email, phone, role`,
+          [name, email, phone, role, id]
+        ),
+        10000
+      )
+    );
 
     return res.status(200).json({
       success: true,
       message: 'Accountant updated successfully in both Clerk and database',
-      accountant: result.rows[0],
+      accountant: updateResult.rows[0],
     });
-  } catch (error) {
-    console.error('Error updating Accountant:', error);
-    return res.status(500).json({ success: false, message: error.message });
+  } catch (err) {
+    console.error('Update error:', err);
+    return res.status(500).json({ success: false, message: err.message });
   } finally {
     client.release();
   }

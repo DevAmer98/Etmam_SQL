@@ -42,13 +42,37 @@ import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
 import allClientsApi from './api/client/all+api.js'; 
 import orderPerClientApi from './api/client/[id]/order+api.js'
-import salesRepClientsApi from './api/client/salesRep+api.js'
+import salesRepClientsApi from './api/client/getClientsForsalesRep+api.js'
 import pendingOrdersCountApi from './api/order/pending.js';
 import pendingQuotationsCountApi from './api/quotation/pending.js';
 import acceptedQuotationsCountApi from './api/quotation/accepted.js';
 import markOrderAsDoneApi from './api/order/mark.js';
 import ordersForAccountantApi from './api/order/forAccountant.js';
 import quotationsExportedCount from './api/quotation/exported/route.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+import { Pool } from 'pg';
+
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.connect()
+  .then(client => {
+    console.log('✅ Connected to database');
+    client.release();
+  })
+  .catch(err => {
+    console.error('❌ Database connection failed:', err);
+    process.exit(1);
+  });
+
+// Handle unexpected errors globally
+process.on('unhandledRejection', reason => {
+  console.error('Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', err => {
+  console.error('Uncaught Exception:', err);
+});
+
 
 
 
@@ -120,6 +144,7 @@ app.use('/api', markOrderAsDoneApi);
 
 
 
+
 // New endpoint to generate and serve PDFs
 app.get('/api/quotation/pdf/:quotationId', async (req, res) => {
   const { quotationId } = req.params;
@@ -139,17 +164,20 @@ app.get('/api/order/pdf/:orderId', async (req, res) => {
 });
 
 
-// Error-handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    details: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
+
+
+
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
-// Start the server
+// Final error handler
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
+

@@ -1,12 +1,11 @@
 import express from 'express';
 import { Pool } from 'pg';
-import { asyncHandler } from '../../utils/asyncHandler'; // adjust path as needed
+import { asyncHandler } from '../../utils/asyncHandler.js'; // adjust path as needed
 
 const router = express.Router();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-
-// Utility function to retry database operations
+// Retry wrapper
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -19,7 +18,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Utility function to add timeout to database queries
+// Timeout wrapper
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
@@ -27,33 +26,41 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-
-router.get('/allClients', asyncHandler(async (req, res) => {
+// GET /api/clients?username=&search=&limit=&page=
+router.get('/clients', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   try {
     const limit = parseInt(req.query.limit || '10', 10);
     const page = parseInt(req.query.page || '1', 10);
     const searchQuery = `%${req.query.search || ''}%`;
+    const username = req.query.username?.trim();
+
+    if (!username) {
+      return res.status(400).json({ error: 'Missing username query parameter' });
+    }
+
     const offset = (page - 1) * limit;
 
     const clientsQuery = `
       SELECT * FROM clients
-      WHERE client_name ILIKE $1 OR company_name ILIKE $1
+      WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))
+      AND (client_name ILIKE $2 OR company_name ILIKE $2)
       ORDER BY client_name
-      LIMIT $2 OFFSET $3
+      LIMIT $3 OFFSET $4;
     `;
 
     const clientsResult = await executeWithRetry(() =>
-      withTimeout(client.query(clientsQuery, [searchQuery, limit, offset]), 10000)
+      withTimeout(client.query(clientsQuery, [username, searchQuery, limit, offset]), 10000)
     );
 
     const countQuery = `
       SELECT COUNT(*) AS count FROM clients
-      WHERE client_name ILIKE $1 OR company_name ILIKE $1
+      WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))
+      AND (client_name ILIKE $2 OR company_name ILIKE $2)
     `;
 
     const countResult = await executeWithRetry(() =>
-      withTimeout(client.query(countQuery, [searchQuery]), 10000)
+      withTimeout(client.query(countQuery, [username, searchQuery]), 10000)
     );
 
     const total = parseInt(countResult.rows[0]?.count || '0', 10);

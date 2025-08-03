@@ -1,18 +1,17 @@
 import express from 'express';
-import pkg from 'pg'; // Import pg library
-const { Pool } = pkg; // Destructure Pool
+import { Pool } from 'pg';
+import { asyncHandler } from '../../utils/asyncHandler.js'; // Adjust path if needed
 
 const router = express.Router();
 
-// Initialize PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
-// Utility function to retry database operations
+// Retry wrapper
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -25,7 +24,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-// Utility function to add timeout to database queries
+// Timeout wrapper
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
@@ -33,41 +32,43 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-// Test database connection
+// Initial DB connectivity test
 (async () => {
   try {
     const res = await executeWithRetry(() =>
       withTimeout(pool.query('SELECT 1 AS test'), 5000)
     );
-    console.log('Database connection successful:', res.rows);
+    console.log('✅ DB connection successful:', res.rows);
   } catch (error) {
-    console.error('Database connection error:', error);
+    console.error('❌ DB connection failed:', error);
   }
 })();
 
 // GET /api/clients/:id/orders
-router.get('/clients/:id/orders', async (req, res) => {
+router.get('/clients/:id/orders', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  if (!id) return res.status(400).json({ error: 'Missing client ID' });
+  if (!id) {
+    return res.status(400).json({ error: 'Missing client ID' });
+  }
 
   const client = await pool.connect();
   try {
     const ordersQuery = `
       SELECT 
-        orders.id,
-        orders.order_number,
-        orders.custom_id,
-        orders.delivery_date,
-        orders.delivery_type,
-        orders.notes,
-        orders.status,
-        orders.total_price,
-        orders.created_at,
-        orders.updated_at
+        id,
+        order_number,
+        custom_id,
+        delivery_date,
+        delivery_type,
+        notes,
+        status,
+        total_price,
+        created_at,
+        updated_at
       FROM orders
-      WHERE orders.client_id = $1
-      ORDER BY orders.created_at DESC
+      WHERE client_id = $1
+      ORDER BY created_at DESC
     `;
 
     const ordersResult = await executeWithRetry(() =>
@@ -118,6 +119,6 @@ router.get('/clients/:id/orders', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
 export default router;

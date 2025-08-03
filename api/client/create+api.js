@@ -1,9 +1,11 @@
 import express from 'express';
-import { neon } from '@neondatabase/serverless';
+import { Pool } from 'pg';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const router = express.Router();
 
-// Utility function to retry database operations
+// Util functions...
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
     return await fn();
@@ -14,9 +16,8 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
     }
     throw error;
   }
-}; 
+};
 
-// Utility function to add timeout to database queries
 const withTimeout = (promise, timeout) => {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Database query timed out')), timeout)
@@ -25,160 +26,103 @@ const withTimeout = (promise, timeout) => {
 };
 
 // POST /api/clients
-router.post('/clients', async (req, res) => {
+router.post('/clients', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
   try {
-    const sql = neon(`${process.env.DATABASE_URL}`);
     const {
-      company_name,
-      username,
-      client_name,
-      client_type,
-      phone_number,
-      tax_number,
-      branch_number,
-      location,
+      company_name, username, client_name, client_type,
+      phone_number, tax_number, branch_number, location
     } = req.body;
 
-    // Validate required fields
     if (
-      !company_name ||
-      !client_name ||
-      !client_type ||
-      !phone_number ||
-      !branch_number ||
-      !location ||
-      !location.latitude ||
-      !location.longitude
+      !company_name || !client_name || !client_type ||
+      !phone_number || !branch_number ||
+      !location || !location.latitude || !location.longitude
     ) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      res.status(400);
+      throw new Error('Missing required fields');
     }
 
-    // Enforce tax_number validation based on client_type
     if (client_type !== 'One-time cash client' && !tax_number) {
-      return res.status(400).json({ error: 'Missing required field: tax_number' });
+      res.status(400);
+      throw new Error('Missing required field: tax_number');
     }
 
-     // 🚫 Check for existing client with same phone number or client_name in the same company
-    const existingClient = await sql`
-     SELECT 1 FROM clients 
-WHERE company_name = ${company_name}
-LIMIT 1;
+    const checkQuery = `SELECT 1 FROM clients WHERE company_name = $1 LIMIT 1;`;
+    const existingClient = await client.query(checkQuery, [company_name]);
+
+    if (existingClient.rows.length > 0) {
+      res.status(409);
+      throw new Error('العميل موجود بالفعل بنفس رقم الهاتف أو الاسم في الشركة');
+    }
+
+    const insertQuery = `
+      INSERT INTO clients (
+        company_name, username, client_name, client_type, phone_number,
+        tax_number, branch_number, latitude, longitude, street, city, region
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING *;
     `;
+    const values = [
+      company_name, username, client_name, client_type, phone_number,
+      tax_number || null, branch_number, location.latitude, location.longitude,
+      location.street || null, location.city || null, location.region || null
+    ];
 
-    if (existingClient.length > 0) {
-      return res.status(409).json({ error: 'العميل موجود بالفعل بنفس رقم الهاتف أو الاسم في الشركة '});
-    }
+    const response = await executeWithRetry(() =>
+      withTimeout(client.query(insertQuery, values), 10000)
+    );
 
-
-    // Use null for `tax_number` if it's optional
-    const response = await executeWithRetry(async () => {
-      return await withTimeout(
-        sql`
-          INSERT INTO clients (
-            company_name,
-            username, 
-            client_name,
-            client_type,
-            phone_number, 
-            tax_number,
-            branch_number,
-            latitude,  
-            longitude,
-            street,
-            city,
-            region
-          ) 
-          VALUES (
-            ${company_name},
-            ${username},
-            ${client_name},
-            ${client_type},
-            ${phone_number},
-            ${tax_number || null},  -- Allow null for optional tax_number
-            ${branch_number},
-            ${location.latitude},
-            ${location.longitude},
-            ${location.street || null},
-            ${location.city || null},
-            ${location.region || null}
-          );
-        `,
-        10000 // 10-second timeout
-      );
-    });
-
-    return res.status(201).json({ data: response });
-  } catch (error) {
-    console.error('Error creating clients:', error);
-    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    res.status(201).json({ data: response.rows[0] });
+  } finally {
+    client.release();
   }
-});
+}));
 
-
-
-router.get('/clients', async (req, res) => {
+// GET /api/clients
+router.get('/clients', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
   try {
-    const sql = neon(`${process.env.DATABASE_URL}`);
-
-    // Parse query parameters from the request URL
-    const limit = parseInt(req.query.limit || '10', 10); // Default limit is 10
-    const page = parseInt(req.query.page || '1', 10); // Default page is 1
-    const searchQuery = req.query.search || ''; // Default to empty string for no search
+    const limit = parseInt(req.query.limit || '10', 10);
+    const page = parseInt(req.query.page || '1', 10);
+    const searchQuery = `%${req.query.search || ''}%`;
     const username = req.query.username || '';
-
-
-    // Calculate the offset for pagination
     const offset = (page - 1) * limit;
 
-    // Fetch filtered and paginated clients
-    const clients = await executeWithRetry(async () => {
-      return await withTimeout(
-        sql`
-          SELECT * FROM clients
-     WHERE clients.username = ${username} AND (
-    client_name ILIKE ${'%' + searchQuery + '%'} OR
-    company_name ILIKE ${'%' + searchQuery + '%'}
-  )
-     ORDER BY client_name
-          LIMIT ${limit}
-          OFFSET ${offset};
-        `,
-        10000 // 10-second timeout
+    const clientsQuery = `
+      SELECT * FROM clients
+      WHERE username = $1 AND (
+        client_name ILIKE $2 OR company_name ILIKE $2
+      )
+      ORDER BY client_name LIMIT $3 OFFSET $4;
+    `;
+    const clients = await executeWithRetry(() =>
+      withTimeout(client.query(clientsQuery, [username, searchQuery, limit, offset]), 10000)
+    );
+
+    const countQuery = `
+      SELECT COUNT(*) AS count FROM clients
+      WHERE username = $1 AND (
+        client_name ILIKE $2 OR company_name ILIKE $2
       );
-    });
+    `;
+    const totalClients = await executeWithRetry(() =>
+      withTimeout(client.query(countQuery, [username, searchQuery]), 10000)
+    );
 
-    // Fetch the total count of clients for pagination metadata
-    const totalClients = await executeWithRetry(async () => {
-      return await withTimeout(
-        sql`
-          SELECT COUNT(*) AS count FROM clients
-          WHERE clients.username = ${username} AND (
-    client_name ILIKE ${'%' + searchQuery + '%'} OR
-    company_name ILIKE ${'%' + searchQuery + '%'}
-  )`,
-
-
-        10000 // 10-second timeout
-      );
-    });
-
-    const total = parseInt(totalClients[0]?.count || '0', 10);
+    const total = parseInt(totalClients.rows[0].count, 10);
     const totalPages = Math.ceil(total / limit);
 
-    return res.status(200).json({
-      clients,
+    res.status(200).json({
+      clients: clients.rows,
       total,
       page,
       totalPages,
       limit,
     });
-  } catch (error) {
-    console.error('Error fetching clients:', error);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      details: error.message,
-    });
+  } finally {
+    client.release();
   }
-});
+}));
 
 export default router;
