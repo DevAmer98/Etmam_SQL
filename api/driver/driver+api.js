@@ -1,7 +1,7 @@
 import express from 'express';
 import pkg from 'pg';
 import sgMail from '@sendgrid/mail';
-import { asyncHandler } from '../../utils/asyncHandler'; 
+import { asyncHandler } from '../../utils/asyncHandler.js'; 
 
 const { Pool } = pkg;
 const router = express.Router();
