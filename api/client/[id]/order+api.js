@@ -1,6 +1,6 @@
 import express from 'express';
 import { Pool } from 'pg';
-import { asyncHandler } from '../../utils/asyncHandler.js'; // Adjust path if needed
+import { asyncHandler } from '../../../utils/asyncHandler.js'; // Adjust path if needed
 
 const router = express.Router();
 
