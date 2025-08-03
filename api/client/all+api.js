@@ -1,6 +1,6 @@
 import express from 'express';
 import { Pool } from 'pg';
-import { asyncHandler } from '../../utils/asyncHandler'; // adjust path as needed
+import { asyncHandler } from '../../utils/asyncHandler.js'; // adjust path as needed
 
 const router = express.Router();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
