@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { asyncHandler } from '../../utils/asyncHandler.js'; // Adjust path as needed
-//import admin from '../../firebase-init.js';
+import admin from '../../firebase-init.js';
 
 const router = express.Router();
 

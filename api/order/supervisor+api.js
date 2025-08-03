@@ -1,6 +1,6 @@
 import express from 'express';
 import moment from 'moment-timezone';
-//import admin from '../../firebase-init.js';
+import admin from '../../firebase-init.js';
 import pkg from 'pg';
 const { Pool } = pkg;
 

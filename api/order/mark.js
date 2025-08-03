@@ -1,5 +1,5 @@
 import express from 'express';
-//import admin from '../../firebase-init.js';
+import admin from '../../firebase-init.js';
 import pkg from 'pg';
 const { Pool } = pkg;
 
