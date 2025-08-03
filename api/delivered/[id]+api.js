@@ -1,6 +1,6 @@
 import express from 'express';
 import pkg from 'pg';
-import { asyncHandler } from '../../utils/asyncHandler'; // adjust path if needed
+import { asyncHandler } from '../../utils/asyncHandler.js'; // adjust path if needed
 // import admin from '../../firebase-init.js';
 
 const { Pool } = pkg;
