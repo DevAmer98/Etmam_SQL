@@ -6,14 +6,21 @@ const { Pool } = pkg;
 
 const router = express.Router();
 
-// Create a connection pool
-const pool = new Pool({
+/*const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000, // Increased timeout
 });
+*/
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: false, // 👈 Disables SSL
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 router.use(express.json());
 
 const withTimeout = (promise, timeout) => {

@@ -6,6 +6,7 @@ const { Pool } = pkg; // Destructure Pool
 
 const router = express.Router();
 
+/*
 // PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -13,7 +14,15 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000, // Increased timeout
 });
+*/
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: false, // 👈 Disables SSL
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 router.use(express.json()); // Middleware to parse JSON bodies
 
 // Utility function to retry database operations
