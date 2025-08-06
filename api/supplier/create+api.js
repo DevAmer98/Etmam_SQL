@@ -25,7 +25,6 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-// POST /api/clients
 router.post('/suppliers', asyncHandler(async (req, res) => {
   const supplier = await pool.connect();
   try {
