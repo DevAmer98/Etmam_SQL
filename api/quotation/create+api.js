@@ -124,7 +124,7 @@ router.post('/quotations', async (req, res) => {
       console.log('Request Body:', req.body);
 
       // Validate required fields
-      if (!client_id || !username || !manager_id || !delivery_date || !delivery_type || !products || products.length === 0) {
+      if (!client_id || !username || !delivery_date || !delivery_type || !products || products.length === 0) {
         await client.query('ROLLBACK'); // Rollback if validation fails
         return res.status(400).json({ error: 'Missing required fields' });
       }
@@ -144,7 +144,7 @@ const newQuotationNumber = maxOrderNumber + 1;
     const insertQuery = `
         INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13) RETURNING id`;
-        const insertParams = [client_id, username, manager_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber];
+        const insertParams = [client_id, username, manager_id || null, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 
