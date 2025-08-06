@@ -7,9 +7,20 @@ const { Pool } = pg;
 const router = Router();
 
 // PostgreSQL Pool Setup
-const pool = new Pool({
+/*const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+*/
+
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: false,  // ✅ Disable SSL
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
