@@ -1,81 +1,82 @@
+import express from 'express';
 import { Pool } from 'pg';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const router = express.Router();
 
-export async function GET(req, { params }) {
+// GET /api/products/:id
+router.get('/products/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
-  const { id } = params;
+  const { id } = req.params;
 
   try {
-    const result = await client.query(
-      `SELECT p.*, s.supplier_name, s.company_name
-       FROM products p
-       LEFT JOIN suppliers s ON p.supplier_id = s.id
-       WHERE p.id = $1;`,
-      [id]
-    );
+    const result = await client.query(`
+      SELECT p.*, s.supplier_name, s.company_name
+      FROM products p
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
+      WHERE p.id = $1;
+    `, [id]);
 
     if (result.rows.length === 0) {
-      return new Response(JSON.stringify({ error: 'Product not found' }), { status: 404 });
+      return res.status(404).json({ error: 'Product not found' });
     }
 
-    return new Response(JSON.stringify(result.rows[0]), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    res.status(200).json(result.rows[0]);
   } catch (err) {
     console.error('GET error:', err);
-    return new Response(JSON.stringify({ error: 'Failed to fetch product' }), { status: 500 });
+    res.status(500).json({ error: 'Failed to fetch product' });
   } finally {
     client.release();
   }
-}
+}));
 
-export async function PUT(req, { params }) {
+// PUT /api/products/:id
+router.put('/products/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
-  const { id } = params;
-  const { name, sku, code, comment } = await req.json();
+  const { id } = req.params;
+  const { name, sku, code, comment } = req.body;
 
   try {
-    const result = await client.query(
-      `UPDATE products
-       SET name = $1, sku = $2, code = $3, comment = $4
-       WHERE id = $5
-       RETURNING *;`,
-      [name, sku, code || null, comment || null, id]
-    );
+    const result = await client.query(`
+      UPDATE products
+      SET name = $1, sku = $2, code = $3, comment = $4
+      WHERE id = $5
+      RETURNING *;
+    `, [name, sku, code || null, comment || null, id]);
 
     if (result.rows.length === 0) {
-      return new Response(JSON.stringify({ error: 'Product not found' }), { status: 404 });
+      return res.status(404).json({ error: 'Product not found' });
     }
 
-    return new Response(JSON.stringify({ message: 'Product updated', product: result.rows[0] }), {
-      status: 200,
-    });
+    res.status(200).json({ message: 'Product updated', product: result.rows[0] });
   } catch (err) {
     console.error('PUT error:', err);
-    return new Response(JSON.stringify({ error: 'Failed to update product' }), { status: 500 });
+    res.status(500).json({ error: 'Failed to update product' });
   } finally {
     client.release();
   }
-}
+}));
 
-export async function DELETE(req, { params }) {
+// DELETE /api/products/:id
+router.delete('/products/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
-  const { id } = params;
+  const { id } = req.params;
 
   try {
     const result = await client.query(`DELETE FROM products WHERE id = $1 RETURNING *;`, [id]);
 
     if (result.rows.length === 0) {
-      return new Response(JSON.stringify({ error: 'Product not found' }), { status: 404 });
+      return res.status(404).json({ error: 'Product not found' });
     }
 
-    return new Response(JSON.stringify({ message: 'Product deleted' }), { status: 200 });
+    res.status(200).json({ message: 'Product deleted' });
   } catch (err) {
     console.error('DELETE error:', err);
-    return new Response(JSON.stringify({ error: 'Failed to delete product' }), { status: 500 });
+    res.status(500).json({ error: 'Failed to delete product' });
   } finally {
     client.release();
   }
-}
+}));
+
+export default router;
