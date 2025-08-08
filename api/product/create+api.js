@@ -9,14 +9,14 @@ router.post('/products', asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { supplier_id, name, sku, code, comment } = req.body;
+    const { supplier_id, name, code, quantity, comment } = req.body;
 
-    if (!supplier_id || !name || !sku) {
-      return res.status(400).json({ error: 'supplier_id, name, and sku are required' });
+    if (!supplier_id || !name || !code) {
+      return res.status(400).json({ error: 'supplier_id, name, and code are required' });
     }
 
     const insertQuery = `
-      INSERT INTO products (supplier_id, name, sku, code, comment)
+      INSERT INTO products (supplier_id, name, quantity, code, comment)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *;
     `;
@@ -24,7 +24,7 @@ router.post('/products', asyncHandler(async (req, res) => {
     const result = await client.query(insertQuery, [
       supplier_id,
       name,
-      sku,
+      quantity,
       code || null,
       comment || null
     ]);
@@ -51,7 +51,7 @@ router.get('/products', asyncHandler(async (req, res) => {
 
     const countQuery = `
       SELECT COUNT(*) FROM products
-      WHERE name ILIKE $1 OR sku ILIKE $1;
+      WHERE name ILIKE $1 OR code ILIKE $1;
     `;
     const countResult = await client.query(countQuery, [searchQuery]);
     const total = parseInt(countResult.rows[0].count, 10);
@@ -60,7 +60,7 @@ router.get('/products', asyncHandler(async (req, res) => {
       SELECT p.*, s.supplier_name, s.company_name
       FROM products p
       LEFT JOIN suppliers s ON p.supplier_id = s.id
-      WHERE p.name ILIKE $1 OR p.sku ILIKE $1
+      WHERE p.name ILIKE $1 OR p.code ILIKE $1
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
