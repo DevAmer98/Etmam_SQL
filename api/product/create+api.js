@@ -5,19 +5,34 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const router = express.Router();
 
+// POST /products
 router.post('/products', asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { supplier_id, name, code, quantity, comment } = req.body;
+    const { supplier_id, name, code, quantity = 0, comment, section_id = null } = req.body;
 
     if (!supplier_id || !name || !code) {
       return res.status(400).json({ error: 'supplier_id, name, and code are required' });
     }
 
+    // ✅ Safeguard: check if section_id exists (if provided)
+    if (section_id !== null) {
+      const sectionCheck = await client.query(
+        'SELECT 1 FROM sections WHERE id = $1',
+        [section_id]
+      );
+
+      if (sectionCheck.rowCount === 0) {
+        return res.status(400).json({ error: 'Invalid section_id provided' });
+      }
+    }
+
+    const status = quantity === 0 ? 'Out of Stock' : 'Available';
+
     const insertQuery = `
-      INSERT INTO products (supplier_id, name, quantity, code, comment)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO products (supplier_id, name, quantity, code, comment, status, section_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
 
@@ -26,7 +41,9 @@ router.post('/products', asyncHandler(async (req, res) => {
       name,
       quantity,
       code || null,
-      comment || null
+      comment || null,
+      status,
+      section_id
     ]);
 
     res.status(201).json({ message: 'Product created successfully', product: result.rows[0] });
@@ -38,7 +55,7 @@ router.post('/products', asyncHandler(async (req, res) => {
   }
 }));
 
-
+// GET /products
 router.get('/products', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   try {
@@ -57,9 +74,14 @@ router.get('/products', asyncHandler(async (req, res) => {
     const total = parseInt(countResult.rows[0].count, 10);
 
     const selectQuery = `
-      SELECT p.*, s.supplier_name, s.company_name
+      SELECT 
+        p.*, 
+        s.supplier_name, 
+        s.company_name,
+        sec.name AS section_name
       FROM products p
       LEFT JOIN suppliers s ON p.supplier_id = s.id
+      LEFT JOIN sections sec ON p.section_id = sec.id
       WHERE p.name ILIKE $1 OR p.code ILIKE $1
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3;
@@ -81,8 +103,4 @@ router.get('/products', asyncHandler(async (req, res) => {
   }
 }));
 
-
 export default router;
-
-
-
