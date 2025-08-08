@@ -25,6 +25,7 @@ import supervisorAcceptQuotationApi from './api/quotation/acceptedOrders+api.js'
 import storekeeperAcceptQuotationApi from './api/quotation/acceptedStorekeeper+api.js';
 import singleQuotationApi from './api/quotation/[id]+api.js';
 import productsApi from './api/product/create+api.js'
+import sectionsApi from './api/product/sections+api.js';
 import singleProductApi from './api/product/[id]+api.js'
 import salesOrderApi from './api/order/salesRep+api.js'; 
 import supervisorAcceptOrderApi from './api/order/acceptedOrders+api.js';
@@ -101,6 +102,7 @@ app.use('/api', supplierApi);
 app.use('/api', orderApi);
 app.use('/api', quotationApi);
 app.use('/api', productsApi)
+app.use('/api/sections', sectionsApi);
 app.use('/api/order', supervisorAcceptOrderApi); // Mount under /api/order
 app.use('/api', ordersForAccountantApi); 
 app.use('/api/order', storekeeperAcceptOrderApi);

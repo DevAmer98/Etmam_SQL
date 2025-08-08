@@ -9,7 +9,7 @@ const router = express.Router();
  * POST /sections
  * Create a new section
  */
-router.post('/sections', asyncHandler(async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -40,7 +40,7 @@ router.post('/sections', asyncHandler(async (req, res) => {
  * GET /sections
  * Get all sections
  */
-router.get('/sections', asyncHandler(async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -62,7 +62,7 @@ router.get('/sections', asyncHandler(async (req, res) => {
  * GET /sections/:id
  * Get single section
  */
-router.get('/sections/:id', asyncHandler(async (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   const { id } = req.params;
 
@@ -89,7 +89,7 @@ router.get('/sections/:id', asyncHandler(async (req, res) => {
  * PUT /sections/:id
  * Update section
  */
-router.put('/sections/:id', asyncHandler(async (req, res) => {
+router.put('/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   const { id } = req.params;
   const { name } = req.body;
@@ -121,7 +121,7 @@ router.put('/sections/:id', asyncHandler(async (req, res) => {
  * DELETE /sections/:id
  * Delete section
  */
-router.delete('/sections/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   const { id } = req.params;
 
