@@ -89,6 +89,8 @@ router.put('/acceptSupervisorQuotation/:id', asyncHandler(async (req, res) => {
           supervisoraccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
+      RETURNING custom_id 
+
     `;
 
     const result = await executeWithRetry(() =>
@@ -99,8 +101,10 @@ router.put('/acceptSupervisorQuotation/:id', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Quotation not found' });
     }
 
-    await sendNotificationToRole('Managers', 'manager', `تم قبول عرض السعر رقم ${id} من قبل المشرف.`, 'المشرف قبل عرض السعر');
-    await sendNotificationToRole('Salesreps', 'salesRep', `تم قبول عرض السعر رقم ${id} من قبل المشرف.`, 'المشرف قبل عرض السعر');
+              const customId = result.rows[0]?.custom_id; 
+
+    await sendNotificationToRole('Managers', 'manager', `تم قبول عرض السعر رقم ${customId} من قبل المشرف.`, 'المشرف قبل عرض السعر');
+    await sendNotificationToRole('Salesreps', 'salesRep', `تم قبول عرض السعر رقم ${customId} من قبل المشرف.`, 'المشرف قبل عرض السعر');
 
     return res.status(200).json({ message: 'Quotation accepted successfully' });
   } catch (err) {

@@ -116,7 +116,7 @@ router.post('/orders/supervisor', async (req, res) => {
   
   try {
     // Validate request body first
-    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal,status = 'not Delivered' } = req.body;
+    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal,status = 'not Delivered', supervisoraccept='accepted' } = req.body;
 
     // Input validation
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -159,9 +159,9 @@ const newOrderNumber = maxOrderNumber + 1;
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number)
-             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9,$10) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null,total_vat, total_subtotal, status, customId,newOrderNumber]
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number,supervisoraccept)
+             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9,$10,$11) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null,total_vat, total_subtotal, status, customId,newOrderNumber,supervisoraccept]
           ),
           10000
         );

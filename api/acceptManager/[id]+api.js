@@ -96,8 +96,9 @@ router.put('/acceptManager/:id', asyncHandler(async (req, res) => {
       SET manageraccept = 'accepted',
           manageraccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-    `;
+  WHERE id = $1
+      RETURNING custom_id
+          `;
 
     const result = await executeWithRetry(() =>
       withTimeout(client.query(updateQuery, [id]), 10000)
@@ -107,13 +108,16 @@ router.put('/acceptManager/:id', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    await sendNotificationToSupervisors(`تم قبول الطلب ${id} من قبل المدير.`);
+        const customId = result.rows[0]?.custom_id; 
+
+
+    await sendNotificationToSupervisors(`تم قبول الطلب ${customId} من قبل المدير.`);
 
     return res.status(200).json({ message: 'Order accepted successfully' });
   } catch (error) {
     console.error('❌ Order accept error:', error);
     return res.status(500).json({
-      error: 'Internal Server Error',
+      error: 'Internal Server Error', 
       details: error.message,
     });
   } finally {

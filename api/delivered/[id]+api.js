@@ -93,15 +93,21 @@ router.put(
           actual_delivery_date = $2,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
+            RETURNING custom_id 
+
+
     `;
 
     await executeWithRetry(() =>
       withTimeout(pool.query(updateQuery, [id, actualDeliveryDate]), 10000)
     );
 
+                  const customId = result.rows[0]?.custom_id; 
+    
+
     await Promise.all([
-      sendNotificationToSupervisor(`تم توصيل الطلب ${id}`),
-      sendNotificationToStorekeeper(`تم توصيل الطلب ${id}`),
+      sendNotificationToSupervisor(`تم توصيل الطلب ${customId}`),
+      sendNotificationToStorekeeper(`تم توصيل الطلب ${customId}`),
     ]);
 
     res.status(200).json({ message: 'Order delivered successfully' });

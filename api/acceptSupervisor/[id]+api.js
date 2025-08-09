@@ -81,6 +81,7 @@ router.put('/acceptSupervisor/:id', asyncHandler(async (req, res) => {
           supervisoraccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
+            RETURNING custom_id
     `;
 
     const result = await executeWithRetry(() =>
@@ -91,17 +92,21 @@ router.put('/acceptSupervisor/:id', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+
+          const customId = result.rows[0]?.custom_id; 
+
+
     await sendNotificationToRole(
       'Storekeepers',
       'storekeeper',
-      `تم قبول الطلب رقم ${id} من قبل المشرف.`,
+      `تم قبول الطلب رقم ${customId} من قبل المشرف.`,
       'المشرف قبل الطلب'
     );
 
     await sendNotificationToRole(
       'Managers',
       'manager',
-      `تم قبول الطلب رقم ${id} من قبل المشرف.`,
+      `تم قبول الطلب رقم ${customId} من قبل المشرف.`,
       'المشرف قبل الطلب'
     );
 

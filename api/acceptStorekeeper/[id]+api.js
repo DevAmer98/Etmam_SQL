@@ -95,6 +95,8 @@ router.put('/acceptStorekeeper/:id', asyncHandler(async (req, res) => {
           storekeeperaccept_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP 
       WHERE id = $1
+                  RETURNING custom_id
+
     `;
 
     const result = await executeWithRetry(() =>
@@ -105,10 +107,15 @@ router.put('/acceptStorekeeper/:id', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Order not found or not updated' });
     }
 
+
+
+                const customId = result.rows[0]?.custom_id; 
+
+
     await sendNotificationToRole(
       'driver',
       'Drivers',
-      `تم قبول الطلب ${id} من قبل أمين المخزن.`,
+      `تم قبول الطلب ${customId} من قبل أمين المخزن.`,
       'الطلب جاهز للتوصيل'
     );
 
