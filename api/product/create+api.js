@@ -55,6 +55,8 @@ router.post('/products', asyncHandler(async (req, res) => {
   }
 }));
 
+
+/*
 // GET /products
 router.get('/products', asyncHandler(async (req, res) => {
   const client = await pool.connect();
@@ -102,5 +104,80 @@ router.get('/products', asyncHandler(async (req, res) => {
     client.release();
   }
 }));
+*/
+
+
+
+router.get('/products', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const limit = parseInt(req.query.limit || '10', 10);
+    const page = parseInt(req.query.page || '1', 10);
+    const search = (req.query.search || '').toString().trim();
+    const sectionIdRaw = req.query.section_id;
+    const sectionId = sectionIdRaw ? parseInt(sectionIdRaw as string, 10) : null;
+
+    const offset = (page - 1) * limit;
+    const searchQuery = `%${search}%`;
+
+    // Build dynamic WHERE
+    const whereParts: string[] = [];
+    const params: any[] = [];
+
+    // search by name or code
+    if (search) {
+      params.push(searchQuery);
+      whereParts.push('(p.name ILIKE $' + params.length + ' OR p.code ILIKE $' + params.length + ')');
+    }
+
+    // optional section filter
+    if (sectionId && !Number.isNaN(sectionId)) {
+      params.push(sectionId);
+      whereParts.push('p.section_id = $' + params.length);
+    }
+
+    const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+    // COUNT
+    const countSql = `
+      SELECT COUNT(*) AS count
+      FROM products p
+      ${whereSql};
+    `;
+    const countResult = await client.query(countSql, params);
+    const total = parseInt(countResult.rows[0].count, 10) || 0;
+
+    // SELECT (join suppliers + sections)
+    const selectParams = [...params, limit, offset];
+    const selectSql = `
+      SELECT 
+        p.*,
+        s.supplier_name,
+        s.company_name,
+        sec.name AS section_name
+      FROM products p
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
+      LEFT JOIN sections  sec ON p.section_id = sec.id
+      ${whereSql}
+      ORDER BY p.created_at DESC
+      LIMIT $${selectParams.length - 1} OFFSET $${selectParams.length};
+    `;
+    const productsResult = await client.query(selectSql, selectParams);
+
+    res.status(200).json({
+      products: productsResult.rows,
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      limit
+    });
+  } catch (err) {
+    console.error('Error fetching products:', err);
+    res.status(500).json({ error: 'Failed to fetch products' });
+  } finally {
+    client.release();
+  }
+}));
+
 
 export default router;
