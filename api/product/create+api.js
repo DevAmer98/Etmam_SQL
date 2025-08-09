@@ -107,7 +107,7 @@ router.get('/products', asyncHandler(async (req, res) => {
 */
 
 
-
+// GET /api/products
 router.get('/products', asyncHandler(async (req, res) => {
   const client = await pool.connect();
   try {
@@ -115,25 +115,25 @@ router.get('/products', asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page || '1', 10);
     const search = (req.query.search || '').toString().trim();
     const sectionIdRaw = req.query.section_id;
-    const sectionId = sectionIdRaw ? parseInt(sectionIdRaw as string, 10) : null;
+    const sectionIdNum = sectionIdRaw !== undefined ? Number(sectionIdRaw) : null;
 
     const offset = (page - 1) * limit;
-    const searchQuery = `%${search}%`;
 
-    // Build dynamic WHERE
-    const whereParts: string[] = [];
-    const params: any[] = [];
+    const whereParts = [];
+    const params = [];
 
-    // search by name or code
+    // search (name or code)
     if (search) {
-      params.push(searchQuery);
-      whereParts.push('(p.name ILIKE $' + params.length + ' OR p.code ILIKE $' + params.length + ')');
+      params.push(`%${search}%`);
+      const idx = params.length; // index of the value we just pushed
+      whereParts.push(`(p.name ILIKE $${idx} OR p.code ILIKE $${idx})`);
     }
 
     // optional section filter
-    if (sectionId && !Number.isNaN(sectionId)) {
-      params.push(sectionId);
-      whereParts.push('p.section_id = $' + params.length);
+    if (sectionIdNum !== null && Number.isInteger(sectionIdNum)) {
+      params.push(sectionIdNum);
+      const idx = params.length;
+      whereParts.push(`p.section_id = $${idx}`);
     }
 
     const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -148,7 +148,9 @@ router.get('/products', asyncHandler(async (req, res) => {
     const total = parseInt(countResult.rows[0].count, 10) || 0;
 
     // SELECT (join suppliers + sections)
-    const selectParams = [...params, limit, offset];
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
+
     const selectSql = `
       SELECT 
         p.*,
@@ -160,8 +162,9 @@ router.get('/products', asyncHandler(async (req, res) => {
       LEFT JOIN sections  sec ON p.section_id = sec.id
       ${whereSql}
       ORDER BY p.created_at DESC
-      LIMIT $${selectParams.length - 1} OFFSET $${selectParams.length};
+      LIMIT $${limitIdx} OFFSET $${offsetIdx};
     `;
+    const selectParams = [...params, limit, offset];
     const productsResult = await client.query(selectSql, selectParams);
 
     res.status(200).json({
