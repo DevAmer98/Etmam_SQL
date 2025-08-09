@@ -7,9 +7,8 @@ const { Pool } = pg;
 const router = Router();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+   ssl: false, // 👈 Disables SSL
+
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000, // Increased timeout
