@@ -374,13 +374,20 @@ const { rows } = await client.query('SELECT MAX(order_number) AS max FROM orders
 const maxOrderNumber = rows[0].max || 0;
 const newOrderNumber = maxOrderNumber + 1;
 
+const nowUtc = moment().tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+const manageraccept_at =
+  manageraccept && manageraccept.toLowerCase() === 'accepted'
+    ? nowUtc
+    : null;
+
+
 
         // Insert order
-        const orderResult = await withTimeout(
+        const orderResult = await withTimeout( 
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number , manageraccept )
-             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9,$10,$11) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null,total_vat, total_subtotal, status, customId,newOrderNumber,manageraccept  ]
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number , manageraccept, manageraccept_at )
+             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9,$10,$11,$12) RETURNING id`,
+            [client_id, username, formattedDate, delivery_type, notes || null,total_vat, total_subtotal, status, customId,newOrderNumber,manageraccept, manageraccept_at  ]
           ),
           10000
         );

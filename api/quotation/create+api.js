@@ -40,7 +40,7 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
     }
     throw error;
   }
-};
+}; 
 
 
 const generateCustomId = async (client) => {
@@ -115,9 +115,10 @@ router.post('/quotations', async (req, res) => {
       delivery_date, 
       delivery_type, 
       products,  
-      notes, 
+      notes,  
       condition = 'نقدي - كاش', 
-      status = 'not Delivered' 
+      status = 'not Delivered',
+      manageraccept = 'accepted' 
       } = req.body;
 
       // Debugging: Log the request body
@@ -140,11 +141,19 @@ const { rows } = await client.query('SELECT MAX(order_number) AS max FROM orders
 const maxOrderNumber = rows[0].max || 0;
 const newQuotationNumber = maxOrderNumber + 1;
 
+
+const nowUtc = moment().tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+const manageraccept_at =
+  manageraccept && manageraccept.toLowerCase() === 'accepted'
+    ? nowUtc
+    : null;
+
+
       // Insert quotation
     const insertQuery = `
-        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13) RETURNING id`;
-        const insertParams = [client_id, username, manager_id || null, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber];
+        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,mnageraccept,manageraccept,manageraccept_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13,$14,$15,$16) RETURNING id`;
+        const insertParams = [client_id, username, manager_id || null, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber,manageraccept,manageraccept_at];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 

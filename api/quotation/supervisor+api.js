@@ -109,7 +109,8 @@ router.post('/quotations/supervisor', async (req, res) => {
       products,  
       notes, 
       condition = 'نقدي - كاش', 
-      status = 'not Delivered' 
+      status = 'not Delivered',
+      supervisoraccept='accepted' 
     } = req.body;
 
     // Validate required fields
@@ -118,17 +119,23 @@ router.post('/quotations/supervisor', async (req, res) => {
     }
 
 
+const nowUtc = moment().tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+const supervisoraccept_at =
+  supervisoraccept && supervisoraccept.toLowerCase() === 'accepted'
+    ? nowUtc
+    : null;
 
+ 
     // Format delivery date
     const formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
     const customId = await generateCustomId(client); // Generate custom_id without RevX
 
     // Insert main quotation
     const insertQuery = `
-      INSERT INTO quotations (client_id, username, supervisor_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id
+      INSERT INTO quotations (client_id, username, supervisor_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,supervisoraccept,supervisoraccept_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13 ,$14) RETURNING id
     `;
-    const insertParams = [client_id, username, supervisor_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
+    const insertParams = [client_id, username, supervisor_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,supervisoraccept, supervisoraccept_at];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 
