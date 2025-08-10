@@ -151,8 +151,8 @@ const manageraccept_at =
 
       // Insert quotation
     const insertQuery = `
-        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,mnageraccept,manageraccept,manageraccept_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13,$14,$15,$16) RETURNING id`;
+        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,manageraccept,manageraccept_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13,$14,$15) RETURNING id`;
         const insertParams = [client_id, username, manager_id || null, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber,manageraccept,manageraccept_at];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
