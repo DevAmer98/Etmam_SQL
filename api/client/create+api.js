@@ -125,4 +125,55 @@ router.get('/clients', asyncHandler(async (req, res) => {
   }
 }));
 
+
+// GET /api/myClients
+router.get('/myClients', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const limit = parseInt(req.query.limit || '10', 10);
+    const page = parseInt(req.query.page || '1', 10);
+    const searchQuery = `%${req.query.search || ''}%`;
+    const username = req.query.username; // must be passed
+    const offset = (page - 1) * limit;
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const clientsQuery = `
+      SELECT * FROM clients
+      WHERE username = $1
+        AND (client_name ILIKE $2 OR company_name ILIKE $2)
+      ORDER BY client_name
+      LIMIT $3 OFFSET $4;
+    `;
+    const clients = await executeWithRetry(() =>
+      withTimeout(client.query(clientsQuery, [username, searchQuery, limit, offset]), 10000)
+    );
+
+    const countQuery = `
+      SELECT COUNT(*) AS count FROM clients
+      WHERE username = $1
+        AND (client_name ILIKE $2 OR company_name ILIKE $2);
+    `;
+    const totalClients = await executeWithRetry(() =>
+      withTimeout(client.query(countQuery, [username, searchQuery]), 10000)
+    );
+
+    const total = parseInt(totalClients.rows[0].count, 10);
+    const totalPages = Math.ceil(total / limit);
+
+    res.status(200).json({
+      clients: clients.rows,
+      total,
+      page,
+      totalPages,
+      limit,
+    });
+  } finally {
+    client.release();
+  }
+}));
+
+
 export default router;
