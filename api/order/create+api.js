@@ -535,7 +535,7 @@ router.post('/orders', async (req, res) => {
 
     if (client_type !== 'One-time cash client' && !tax_number) {
       return res.status(400).json({ 
-        error: 'Missing required field: tax_number',
+        error: 'يرجى إضافة رقم ضريبي لهذا العميل قبل إنشاء الطلب.',
         message: 'يرجى إضافة رقم ضريبي لهذا العميل قبل إنشاء الطلب.'
       });
     }
