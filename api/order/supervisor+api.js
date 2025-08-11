@@ -109,7 +109,7 @@ async function sendNotificationToManager(message, title = 'Notification') {
     if (client) client.release();
   }
 }
-
+/*
 // POST endpoint to create an order
 router.post('/orders/supervisor', async (req, res) => {
   let client;
@@ -266,6 +266,198 @@ const supervisoraccept_at =
   }
 });
 
+*/
+
+
+// POST endpoint to create an order
+router.post('/orders/supervisor', async (req, res) => {
+  let client;
+  
+  try {
+    // Validate request body first
+    const { 
+      client_id, 
+      username, 
+      delivery_date, 
+      delivery_type, 
+      products, 
+      notes, 
+      deliveryLocations = [],
+      total_vat, 
+      total_subtotal,
+      status = 'not Delivered', 
+      supervisoraccept = 'accepted' 
+    } = req.body;
+
+    // Input validation
+    if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: {
+          client_id: !client_id ? 'Required' : 'Valid',
+          delivery_date: !delivery_date ? 'Required' : 'Valid',
+          delivery_type: !delivery_type ? 'Required' : 'Valid',
+          products: !products || products.length === 0 ? 'Required and must not be empty' : 'Valid'
+        }
+      });
+    } 
+
+    // ✅ Client type / tax number pre-check
+    // Allow order if client_type === 'One-time cash client' even when tax_number is null.
+    // Otherwise, require tax_number.
+    const preCheck = await pool.query(
+      'SELECT client_type, tax_number FROM clients WHERE id = $1',
+      [client_id]
+    );
+    if (preCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    const { client_type, tax_number } = preCheck.rows[0];
+    if (client_type !== 'One-time cash client' && !tax_number) {
+      return res.status(400).json({
+        error: 'Missing required field: tax_number',
+        message: 'يرجى إضافة رقم ضريبي لهذا العميل قبل إنشاء الطلب.'
+      });
+    }
+
+    await executeWithRetry(async () => {
+      client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        // Format date
+        let formattedDate;
+        try {
+          formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+        } catch (dateError) {
+          throw new Error('Invalid delivery date format');
+        }
+
+        // Generate custom ID
+        const customId = await generateCustomId(client);
+
+        // Fetch the max order_number currently in the DB
+        const { rows } = await client.query('SELECT MAX(order_number) AS max FROM orders');
+        const maxOrderNumber = rows[0].max || 0;
+        const newOrderNumber = maxOrderNumber + 1;
+
+        const nowUtc = moment().tz('UTC').format('YYYY-MM-DD HH:mm:ss');
+        const supervisoraccept_at =
+          supervisoraccept && supervisoraccept.toLowerCase() === 'accepted'
+            ? nowUtc
+            : null;
+
+        // Insert order
+        const orderResult = await withTimeout(
+          client.query(
+            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id, order_number, supervisoraccept, supervisoraccept_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+            [
+              client_id, username, formattedDate, delivery_type, notes || null,
+              total_vat, total_subtotal, status, customId, newOrderNumber,
+              supervisoraccept, supervisoraccept_at
+            ]
+          ),
+          10000
+        );
+ 
+        if (!orderResult.rows || orderResult.rows.length === 0) {
+          throw new Error('Failed to create order - no ID returned');
+        }
+
+        const orderId = orderResult.rows[0].id;
+        let totalPrice = 0;
+
+        // Insert products
+        for (const product of products) {
+          totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+          await withTimeout(
+            client.query(
+              `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                orderId, product.description, product.quantity,
+                parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal)
+              ]
+            ),
+            5000
+          );
+        }
+
+        // Insert delivery locations
+        for (const location of deliveryLocations) {
+          if (location.name && location.url) {
+            await client.query(
+              `INSERT INTO order_locations (order_id, name, url)
+               VALUES ($1, $2, $3)`,
+              [orderId, location.name, location.url]
+            );
+          }
+        }
+
+        // Update total price
+        await withTimeout(
+          client.query(`UPDATE orders SET total_price = $1 WHERE id = $2`, [totalPrice, orderId]),
+          5000
+        );
+
+        await client.query('COMMIT');
+
+        // Send notifications (don't let this fail the whole operation)
+        try {
+          await sendNotificationToManager(`تم إنشاء طلب جديد بالمعرف ${customId} وينتظر موافقتك.`, 'إشعار طلب جديد');
+        } catch (notificationError) {
+          console.error('Notification failed but order was created successfully:', notificationError);
+        }
+
+        return res.status(201).json({ 
+          orderId, 
+          customId, 
+          status: 'success', 
+          totalPrice,
+          message: 'Order created successfully'
+        });
+
+      } catch (transactionError) {
+        console.error('Transaction error:', transactionError);
+        await client.query('ROLLBACK');
+        throw transactionError;
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating order:', error);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Error creating order';
+    let statusCode = 500;
+    
+    if (error.message.includes('Invalid delivery date')) {
+      errorMessage = 'Invalid delivery date format';
+      statusCode = 400;
+    } else if (error.message.includes('Failed to generate order ID')) {
+      errorMessage = 'Failed to generate order ID';
+      statusCode = 500;
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Database operation timed out';
+      statusCode = 503;
+    } else if (error.message.includes('Missing required fields')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    }
+
+    return res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+});
 
 
 router.get('/supervisor', async (req, res) => {

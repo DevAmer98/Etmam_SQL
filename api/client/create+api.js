@@ -43,10 +43,7 @@ router.post('/clients', asyncHandler(async (req, res) => {
       throw new Error('Missing required fields');
     }
 
-    if (client_type !== 'One-time cash client' && !tax_number) {
-      res.status(400);
-      throw new Error('Missing required field: tax_number');
-    }
+
 
     const checkQuery = `SELECT 1 FROM clients WHERE company_name = $1 LIMIT 1;`;
     const existingClient = await client.query(checkQuery, [company_name]);
