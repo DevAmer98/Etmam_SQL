@@ -33,20 +33,24 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+// Shared where clause to exclude rejected/cancelled/delivered
+const baseFilter = `
+  status NOT IN ('rejected')
+`;
 
-
+// Manager
 router.get('/orders/manager/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE orders.manageraccept = 'pending'
+        AND ${baseFilter}
     `;
 
-const result = await client.query(countQuery);
+    const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingOrdersCount: count });
@@ -58,21 +62,19 @@ const result = await client.query(countQuery);
   }
 });
 
-
-
-
+// Supervisor
 router.get('/orders/supervisor/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE orders.supervisoraccept = 'pending'
+        AND ${baseFilter}
     `;
 
-const result = await client.query(countQuery);
+    const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingOrdersCount: count });
@@ -84,22 +86,19 @@ const result = await client.query(countQuery);
   }
 });
 
-
-
-
-
+// Storekeeper
 router.get('/orders/storekeeper/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM orders
       JOIN clients ON orders.client_id = clients.id
       WHERE orders.storekeeperaccept = 'pending'
+        AND ${baseFilter}
     `;
 
-const result = await client.query(countQuery);
+    const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingOrdersCount: count });
@@ -110,7 +109,5 @@ const result = await client.query(countQuery);
     client.release();
   }
 });
-
-
 
 export default router;

@@ -9,12 +9,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
+  connectionTimeoutMillis: 10000,
 });
 
 router.use(express.json());
-
-
 
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
@@ -28,20 +26,24 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+// Shared filter to exclude completed/rejected quotations
+const baseFilter = `
+  status NOT IN ('rejected')
+`;
 
-
+// Manager
 router.get('/quotations/manager/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
       WHERE quotations.manageraccept = 'pending'
+        AND ${baseFilter}
     `;
 
-const result = await client.query(countQuery);
+    const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingQuotationsCount: count });
@@ -53,21 +55,19 @@ const result = await client.query(countQuery);
   }
 });
 
-
-
-
+// Supervisor
 router.get('/quotations/supervisor/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
-
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
       WHERE quotations.supervisoraccept = 'pending'
+        AND ${baseFilter}
     `;
 
-const result = await client.query(countQuery);
+    const result = await client.query(countQuery);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingQuotationsCount: count });
