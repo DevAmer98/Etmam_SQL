@@ -632,7 +632,6 @@ router.put('/orders/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/orders/:id
 router.delete('/orders/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -651,6 +650,77 @@ router.delete('/orders/:id', async (req, res) => {
       FROM orders
       WHERE id = $1
       FOR UPDATE
+    `;
+    const checkResult = await executeWithRetry(async () => {
+      return await withTimeout(client.query(checkQuery, [id]), 10000);
+    });
+
+    if (checkResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const currentStatus = (checkResult.rows[0].status || '').toLowerCase();
+    if (currentStatus === 'delivered') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cannot delete an order that is already delivered' });
+    }
+
+    const deleteProductsQuery = `DELETE FROM order_products WHERE order_id = $1`;
+    await executeWithRetry(async () => {
+      return await withTimeout(client.query(deleteProductsQuery, [id]), 10000);
+    });
+
+    const deleteOrderQuery = `DELETE FROM orders WHERE id = $1`;
+    const deleteOrderResult = await executeWithRetry(async () => {
+      return await withTimeout(client.query(deleteOrderQuery, [id]), 10000);
+    });
+
+    if (deleteOrderResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    await client.query('COMMIT');
+    return res.status(200).json({ message: 'Order and associated products deleted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Database error:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
+router.rejected('/orders/reject:id', async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ error: 'Missing order ID' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    
+
+
+    // Lock and check status first to prevent deleting delivered orders
+    const checkQuery = `
+       UPDATE orders 
+      SET status = 'rejected',
+          actual_rejection_date = $2,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+            RETURNING custom_id 
     `;
     const checkResult = await executeWithRetry(async () => {
       return await withTimeout(client.query(checkQuery, [id]), 10000);

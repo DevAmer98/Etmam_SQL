@@ -40,6 +40,8 @@ import acceptedManagerQoutationApi from './api/acceptManagerQuotation/[id]+api.j
 //import supervisorOrderApi from './api/order/create+api.js'
 import deliverdApi from './api/delivered/[id]+api.js';
 import notDeliverdApi from './api/not-delivered/[id]+api.js';
+import rejectedOrderApi from './api/rejectedOrder/[id]+api.js';
+import rejectedQuotationApi from './api/rejectedQuotation/[id]+api.js';
 import { servePDF } from './api/quotation/pdf.js'; 
 import { serveOrderPDF } from './api/order/pdf.js'; 
 import { serveXLXS } from './api/order/excel.js'; 
@@ -140,6 +142,8 @@ app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
 app.use('/api', pendingQuotationsCountApi);
 app.use('/api', markOrderAsDoneApi);
+app.use('/api', rejectedOrderApi);
+app.use('/api', rejectedQuotationApi);
 
 
 
