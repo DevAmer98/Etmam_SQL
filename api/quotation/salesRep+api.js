@@ -6,14 +6,6 @@ const { Pool } = pkg; // Destructure Pool
 
 const router = express.Router();
 
-// PostgreSQL connection pool
-/*const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // Increased timeout
-});
-*/
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -146,7 +138,7 @@ router.post('/quotations/salesRep', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { client_id, username, sales_rep_id, delivery_date, delivery_type, products, notes, condition = 'نقدي - كاش', status = 'not Delivered' } = req.body;
+    const { client_id, username, sales_rep_id, delivery_date, delivery_type, products, notes, manager_notes, condition = 'نقدي - كاش', status = 'not Delivered' } = req.body;
 
     // Validate required fields
     if (!client_id || !username || !sales_rep_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -159,10 +151,10 @@ router.post('/quotations/salesRep', async (req, res) => {
 
     // Insert main quotation
     const insertQuery = `
-      INSERT INTO quotations (client_id, username, sales_rep_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id
+      INSERT INTO quotations (client_id, username, sales_rep_id, delivery_date, delivery_type, notes, manager_notes, status, total_price, total_vat, total_subtotal, custom_id, condition)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12 ,$13) RETURNING id
     `;
-    const insertParams = [client_id, username, sales_rep_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition];
+    const insertParams = [client_id, username, sales_rep_id, formattedDate, delivery_type, notes || null,  manager_notes || null, status, 0, 0, 0, customId, condition];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 

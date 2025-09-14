@@ -403,6 +403,7 @@ router.post('/orders/salesRep', async (req, res) => {
         orders.actual_delivery_date,
         orders.total_price, 
         orders.total_vat, 
+        orders.manager_notes, 
         orders.order_number,
         orders.total_subtotal 
       FROM orders
