@@ -9,7 +9,7 @@ const router = express.Router();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
-  idleTimeoutMillis: 30000,
+  idleTimeoutMillis: 30000, 
   connectionTimeoutMillis: 10000,
 });
 
@@ -74,8 +74,52 @@ const sendNotificationToSupervisor = (msg, title) =>
 const sendNotificationToStorekeeper = (msg, title) =>
   sendFCMToRole('storekeeper', 'Storekeepers', msg, title);
 
-// --- Delivered Route ---
 
+//fixed //
+
+router.put(
+  '/delivered/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400);
+      throw new Error('Missing order ID');
+    }
+
+    const actualDeliveryDate = new Date().toISOString();
+    const updateQuery = `
+      UPDATE orders 
+      SET status = 'Delivered',
+          actual_delivery_date = $2,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING custom_id
+    `;
+
+    // ✅ Capture the result from the query
+    const result = await executeWithRetry(() =>
+      withTimeout(pool.query(updateQuery, [id, actualDeliveryDate]), 10000)
+    );
+
+    const customId = result.rows[0]?.custom_id;
+
+    // ✅ Optional: handle missing custom_id gracefully
+    if (!customId) {
+      console.warn(`No custom_id found for order ${id}`);
+    }
+
+    await Promise.all([
+      sendNotificationToSupervisor(`تم توصيل الطلب ${customId || id}`),
+      sendNotificationToStorekeeper(`تم توصيل الطلب ${customId || id}`),
+    ]);
+
+    res.status(200).json({ message: 'Order delivered successfully', customId });
+  })
+);
+
+// --- Delivered Route ---
+/*
 router.put(
   '/delivered/:id',
   asyncHandler(async (req, res) => {
@@ -113,5 +157,5 @@ router.put(
     res.status(200).json({ message: 'Order delivered successfully' });
   })
 );
-
+*/
 export default router;
