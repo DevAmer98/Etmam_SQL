@@ -71,6 +71,22 @@ function normalizeFullName(fullName) {
     const templateContent = fs.readFileSync(templatePath, 'binary');
     const zip = new PizZip(templateContent);
 
+
+    // Format numbers before populating the DOCX
+function formatCurrency(num) {
+  if (num == null || isNaN(num)) return '';
+  return Number(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+// Apply formatting to totals
+if (orderData.total_price) orderData.total_price = formatCurrency(orderData.total_price);
+if (orderData.total_vat) orderData.total_vat = formatCurrency(orderData.total_vat);
+if (orderData.total_subtotal) orderData.total_subtotal = formatCurrency(orderData.total_subtotal);
+
+
     // Initialize Docxtemplater
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
