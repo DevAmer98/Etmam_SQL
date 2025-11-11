@@ -88,7 +88,16 @@ if (orderData.total_price) orderData.total_price = formatCurrency(orderData.tota
 if (orderData.total_vat) orderData.total_vat = formatCurrency(orderData.total_vat);
 if (orderData.total_subtotal) orderData.total_subtotal = formatCurrency(orderData.total_subtotal);
 
-
+// ✅ Format per-product numbers
+if (Array.isArray(orderData.products)) {
+  orderData.products = orderData.products.map(product => ({
+    ...product,
+    price: formatCurrency(product.price),
+    subtotal: formatCurrency(product.subtotal),
+    vat: formatCurrency(product.vat),
+    total_with_vat: formatCurrency(product.total_with_vat)
+  }));
+}
     // Initialize Docxtemplater
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
