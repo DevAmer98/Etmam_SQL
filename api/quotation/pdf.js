@@ -82,6 +82,8 @@ function formatCurrency(num) {
 }
 
 // Apply formatting to totals
+if (orderData.price) orderData.price = formatCurrency(orderData.price);
+if (orderData.subtotal) orderData.subtotal = formatCurrency(orderData.subtotal);
 if (orderData.total_price) orderData.total_price = formatCurrency(orderData.total_price);
 if (orderData.total_vat) orderData.total_vat = formatCurrency(orderData.total_vat);
 if (orderData.total_subtotal) orderData.total_subtotal = formatCurrency(orderData.total_subtotal);
