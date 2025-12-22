@@ -8,19 +8,25 @@ async function getMedadToken() {
     return cachedToken;
   }
 
+  // Build payload safely (year is OPTIONAL)
+  const payload = {
+    username: process.env.MEDAD_USERNAME,
+    password: process.env.MEDAD_PASSWORD,
+    subscriptionId: process.env.MEDAD_SUBSCRIPTION_ID,
+    branch: Number(process.env.MEDAD_BRANCH),
+  };
+
+  if (process.env.MEDAD_YEAR) {
+    payload.year = process.env.MEDAD_YEAR;
+  }
+
   const response = await fetch(`${process.env.MEDAD_BASE_URL}/getToken`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({
-      username: process.env.MEDAD_USERNAME,
-      password: process.env.MEDAD_PASSWORD,
-      year: process.env.MEDAD_YEAR,
-      subscriptionId: process.env.MEDAD_SUBSCRIPTION_ID,
-      branch: Number(process.env.MEDAD_BRANCH),
-    }),
+    body: JSON.stringify(payload), // ✅ USE PAYLOAD
   });
 
   if (!response.ok) {
@@ -40,7 +46,7 @@ async function getMedadToken() {
     throw new Error('Medad token not found in response');
   }
 
-  // Expiry handling (default 1 hour if not provided)
+  // Expiry handling (default 1 hour)
   const expiresIn = Number(data.expiresIn || data.expires_in || 3600);
 
   cachedToken = token;
@@ -72,7 +78,7 @@ export default async function medadProducts(req, res) {
 
     const data = await response.json();
 
-    // Normalize response (Medad is not always consistent)
+    // Normalize response
     const items =
       data.items ||
       data.data ||
