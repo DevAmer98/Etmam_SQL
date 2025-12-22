@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import managerApi from './api/manager/manager+api.js';
 import medadProducts from './api/medadProducts.js';
+import medadProductDetails from './api/medadProductDetails.js';
 import singleManagerApi from './api/manager/[id]+api.js';
 import accountantApi from './api/accountant/accountant+api.js';
 import singleAccountantApi from './api/accountant/[id]+api.js';
@@ -55,6 +56,7 @@ import pendingOrdersCountApi from './api/order/pending.js';
 import pendingQuotationsCountApi from './api/quotation/pending.js';
 import acceptedQuotationsCountApi from './api/quotation/accepted.js';
 import markOrderAsDoneApi from './api/order/mark.js';
+import userWarehouseApi from './api/user/warehouse+api.js';
 import ordersForAccountantApi from './api/order/forAccountant.js';
 import quotationsExportedCount from './api/quotation/exported/route.js';
 import { errorHandler } from './middlewares/errorHandler.js';
@@ -93,6 +95,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.get('/api/medad/products', medadProducts);
+app.get('/api/medad/products/:productNo', medadProductDetails);
 
 // Mount the API routes under /api
 app.use('/api', managerApi);
@@ -146,6 +149,7 @@ app.use('/api', pendingQuotationsCountApi);
 app.use('/api', markOrderAsDoneApi);
 app.use('/api', rejectedOrderApi);
 app.use('/api', rejectedQuotationApi);
+app.use('/api', userWarehouseApi);
 
 
 
