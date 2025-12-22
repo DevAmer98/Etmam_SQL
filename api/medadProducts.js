@@ -14,11 +14,9 @@ async function getMedadToken() {
     password: process.env.MEDAD_PASSWORD,
     subscriptionId: process.env.MEDAD_SUBSCRIPTION_ID,
     branch: Number(process.env.MEDAD_BRANCH),
+    year: process.env.MEDAD_YEAR,
   };
 
-  if (process.env.MEDAD_YEAR) {
-    payload.year = process.env.MEDAD_YEAR;
-  }
 
   const response = await fetch(`${process.env.MEDAD_BASE_URL}/getToken`, {
     method: 'POST',
