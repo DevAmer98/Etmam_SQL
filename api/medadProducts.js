@@ -58,7 +58,7 @@ export default async function medadProducts(req, res) {
   try {
     const token = await getMedadToken();
 
-    const PAGE_SIZE = 200; // try to grab everything in a few calls (Medad defaults to 10)
+    const PAGE_SIZE = 100; // Medad max limit per docs
     let page = 1;
     const all = [];
     const seen = new Set();
