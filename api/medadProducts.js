@@ -58,31 +58,65 @@ export default async function medadProducts(req, res) {
   try {
     const token = await getMedadToken();
 
-    const response = await fetch(`${process.env.MEDAD_BASE_URL}/products`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    const PAGE_SIZE = 200; // try to grab everything in a few calls (Medad defaults to 10)
+    let page = 1;
+    const all = [];
+    const seen = new Set();
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('Medad products error:', text);
-      return res.status(500).json({
-        error: 'Failed to fetch products from Medad',
+    // fetch pages until no new items arrive (covers APIs that ignore pagination too)
+    while (true) {
+      const url = `${process.env.MEDAD_BASE_URL}/products?page=${page}&limit=${PAGE_SIZE}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
       });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Medad products error:', text);
+        return res.status(500).json({
+          error: 'Failed to fetch products from Medad',
+        });
+      }
+
+      const data = await response.json();
+
+      // Normalize response
+      const items =
+        data.items ||
+        data.data ||
+        (Array.isArray(data) ? data : []);
+
+      const totalPages = data.total_pages || data.totalPages || data.totalpages;
+
+      const fresh = items.filter(p => {
+        const key = p.productNo || p.id || JSON.stringify(p);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      all.push(...fresh);
+
+      // stop if:
+      // - we reached the reported total pages
+      // - fewer than requested page size returned
+      // - no new items (duplicate-only)
+      if (
+        (totalPages && page >= totalPages) ||
+        items.length < PAGE_SIZE ||
+        fresh.length === 0 ||
+        page >= 200 // absolute safety cap
+      ) {
+        break;
+      }
+      page += 1;
     }
 
-    const data = await response.json();
-
-    // Normalize response
-    const items =
-      data.items ||
-      data.data ||
-      (Array.isArray(data) ? data : []);
-
-    return res.status(200).json({ items });
+    return res.status(200).json({ items: all });
   } catch (error) {
     console.error('Medad integration error:', error);
     return res.status(500).json({
