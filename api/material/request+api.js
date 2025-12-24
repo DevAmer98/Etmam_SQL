@@ -1,3 +1,4 @@
+//api/material/request+api.js
 import express from 'express';
 import { Pool } from 'pg';
 import admin from '../../firebase-init.js';
@@ -127,6 +128,29 @@ router.post('/requestMaterial', async (req, res) => {
   } catch (err) {
     console.error('❌ Failed to create material request:', err);
     return res.status(500).json({ error: err.message || 'Failed to create material request' });
+  } finally {
+    client.release();
+  }
+});
+
+// Fetch material requests
+router.get('/requestMaterial', async (_req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+    const selectSql = `
+      SELECT id, products, request_all, requested_by, note, status, created_at
+      FROM material_requests
+      ORDER BY created_at DESC
+    `;
+    const result = await executeWithRetry(() => withTimeout(client.query(selectSql), 10000));
+    return res.status(200).json({
+      success: true,
+      requests: result.rows || [],
+    });
+  } catch (err) {
+    console.error('❌ Failed to fetch material requests:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch material requests' });
   } finally {
     client.release();
   }
