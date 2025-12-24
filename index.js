@@ -59,6 +59,7 @@ import markOrderAsDoneApi from './api/order/mark.js';
 import userWarehouseApi from './api/user/warehouse+api.js';
 import ordersForAccountantApi from './api/order/forAccountant.js';
 import quotationsExportedCount from './api/quotation/exported/route.js';
+import requestMaterialApi from './api/material/request+api.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { Pool } from 'pg';
 
@@ -150,6 +151,7 @@ app.use('/api', markOrderAsDoneApi);
 app.use('/api', rejectedOrderApi);
 app.use('/api', rejectedQuotationApi);
 app.use('/api', userWarehouseApi);
+app.use('/api/material', requestMaterialApi);
 
 
 
