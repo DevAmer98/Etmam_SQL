@@ -98,6 +98,41 @@ const sendNotificationToManagers = async (summary, count) => {
   }
 };
 
+// Medad token helper (used to fetch suppliers from Medad API)
+let cachedToken = null;
+let tokenExpiry = 0;
+const getMedadToken = async () => {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+
+  const payload = {
+    username: process.env.MEDAD_USERNAME,
+    password: process.env.MEDAD_PASSWORD,
+    subscriptionId: process.env.MEDAD_SUBSCRIPTION_ID,
+    branch: Number(process.env.MEDAD_BRANCH),
+    year: process.env.MEDAD_YEAR,
+  };
+
+  const response = await fetch(`${process.env.MEDAD_BASE_URL}/getToken`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Medad token request failed: ${text}`);
+  }
+
+  const data = await response.json();
+  const token = data.token || data.access_token || data?.data?.token;
+  if (!token) throw new Error('Medad token not found in response');
+
+  const expiresIn = Number(data.expiresIn || data.expires_in || 3600);
+  cachedToken = token;
+  tokenExpiry = Date.now() + (expiresIn - 60) * 1000; // refresh 1 min early
+  return cachedToken;
+};
+
 router.post('/requestMaterial', async (req, res) => {
   const { products = [], requestAll = false, requestedBy = null, note = null } = req.body || {};
 
@@ -186,24 +221,44 @@ router.get('/requestMaterial', async (_req, res) => {
 
 // Lightweight suppliers list for assignment dropdowns
 router.get('/suppliers', async (_req, res) => {
-  const client = await pool.connect();
   try {
-    const sql = `
-      SELECT id, supplier_name, company_name, phone_number
-      FROM suppliers
-      ORDER BY supplier_name ASC
-      LIMIT 200
-    `;
-    const result = await executeWithRetry(() => withTimeout(client.query(sql), 10000));
+    const token = await getMedadToken();
+    const accountType = process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE || 2;
+    const url = `${process.env.MEDAD_BASE_URL}/customers?accountType=${accountType}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to fetch suppliers');
+    }
+
+    const data = await response.json();
+    const list = Array.isArray(data?.customers ?? data)
+      ? (data.customers ?? data)
+      : Array.isArray(data)
+        ? data
+        : [];
+
+    const suppliers = list.map((s, idx) => ({
+      id: s.id?.toString() || s.customerId?.toString() || `${idx}`,
+      supplier_name: s.name || s.company_name || 'Supplier',
+      company_name: s.company_name || s.name || '',
+      phone_number: s.phone || s.contact1Phone || '',
+    }));
+
     return res.status(200).json({
       success: true,
-      suppliers: result.rows || [],
+      suppliers,
     });
   } catch (err) {
     console.error('❌ Failed to fetch suppliers for material requests:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch suppliers' });
-  } finally {
-    client.release();
   }
 });
 
