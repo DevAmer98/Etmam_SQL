@@ -223,7 +223,8 @@ router.get('/requestMaterial', async (_req, res) => {
 router.get('/suppliers', async (_req, res) => {
   try {
     const token = await getMedadToken();
-    const accountType = process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE || 2;
+    // Medad expects accountType as string, allowed values per docs: 0=Customer, 1=Vendor
+    const accountType = (process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE ?? '1').toString();
     const url = `${process.env.MEDAD_BASE_URL}/customers?accountType=${accountType}`;
 
     const response = await fetch(url, {
