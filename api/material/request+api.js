@@ -51,7 +51,10 @@ const ensureTable = async client => {
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_driver_name TEXT",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_driver_email TEXT",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ",
-    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_note TEXT"
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_note TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_quantity NUMERIC",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_id TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_name TEXT"
   ];
   for (const sql of alterStatements) {
     await executeWithRetry(() => withTimeout(client.query(sql), 10000));
@@ -161,7 +164,10 @@ router.get('/requestMaterial', async (_req, res) => {
         assigned_driver_name,
         assigned_driver_email,
         assigned_at,
-        manager_note
+        manager_note,
+        assigned_quantity,
+        supplier_id,
+        supplier_name
       FROM material_requests
       ORDER BY created_at DESC
     `;
@@ -178,10 +184,41 @@ router.get('/requestMaterial', async (_req, res) => {
   }
 });
 
+// Lightweight suppliers list for assignment dropdowns
+router.get('/suppliers', async (_req, res) => {
+  const client = await pool.connect();
+  try {
+    const sql = `
+      SELECT id, supplier_name, company_name, phone_number
+      FROM suppliers
+      ORDER BY supplier_name ASC
+      LIMIT 200
+    `;
+    const result = await executeWithRetry(() => withTimeout(client.query(sql), 10000));
+    return res.status(200).json({
+      success: true,
+      suppliers: result.rows || [],
+    });
+  } catch (err) {
+    console.error('❌ Failed to fetch suppliers for material requests:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch suppliers' });
+  } finally {
+    client.release();
+  }
+});
+
 // Assign one or more material requests to a driver
 router.post('/requestMaterial/assign', async (req, res) => {
-  const { requestIds = [], driverId = null, driverName = null, driverEmail = null, managerNote = null } =
-    req.body || {};
+  const {
+    requestIds = [],
+    driverId = null,
+    driverName = null,
+    driverEmail = null,
+    managerNote = null,
+    quantity = null,
+    supplierId = null,
+    supplierName = null,
+  } = req.body || {};
 
   const ids = Array.isArray(requestIds)
     ? requestIds
@@ -204,14 +241,29 @@ router.post('/requestMaterial/assign', async (req, res) => {
         assigned_driver_name = $3,
         assigned_driver_email = $4,
         manager_note = $5,
+        assigned_quantity = $6,
+        supplier_id = $7,
+        supplier_name = $8,
         status = 'assigned',
         assigned_at = CURRENT_TIMESTAMP
       WHERE id = ANY($1::int[])
-      RETURNING id, status, assigned_driver_id, assigned_driver_name, assigned_driver_email, assigned_at, manager_note
+      RETURNING id, status, assigned_driver_id, assigned_driver_name, assigned_driver_email, assigned_at, manager_note, assigned_quantity, supplier_id, supplier_name
     `;
 
     const result = await executeWithRetry(() =>
-      withTimeout(client.query(updateSql, [ids, driverId, driverName, driverEmail, managerNote]), 10000)
+      withTimeout(
+        client.query(updateSql, [
+          ids,
+          driverId,
+          driverName,
+          driverEmail,
+          managerNote,
+          quantity != null ? Number(quantity) : null,
+          supplierId,
+          supplierName,
+        ]),
+        10000
+      )
     );
 
     return res.status(200).json({
