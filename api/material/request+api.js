@@ -225,7 +225,7 @@ router.get('/suppliers', async (_req, res) => {
     const token = await getMedadToken();
     // Medad expects accountType as string, allowed values per docs: 0=Customer, 1=Vendor
     const accountType = (process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE ?? '1').toString();
-    const PAGE_SIZE = 200;
+    const PAGE_SIZE = 100;
     let page = 1;
     const suppliers = [];
     const seen = new Set();
