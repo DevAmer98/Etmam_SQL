@@ -225,33 +225,54 @@ router.get('/suppliers', async (_req, res) => {
     const token = await getMedadToken();
     // Medad expects accountType as string, allowed values per docs: 0=Customer, 1=Vendor
     const accountType = (process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE ?? '1').toString();
-    const url = `${process.env.MEDAD_BASE_URL}/customers?accountType=${accountType}`;
+    const PAGE_SIZE = 200;
+    let page = 1;
+    const suppliers = [];
+    const seen = new Set();
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    while (true) {
+      const url = `${process.env.MEDAD_BASE_URL}/customers?accountType=${accountType}&page=${page}&limit=${PAGE_SIZE}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || 'Failed to fetch suppliers');
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Failed to fetch suppliers');
+      }
+
+      const data = await response.json();
+      const raw =
+        data?.customers ||
+        data?.items ||
+        data?.data ||
+        (Array.isArray(data) ? data : []);
+
+      const batch = Array.isArray(raw) ? raw : [];
+      const normalized = batch
+        .map((s, idx) => {
+          const id = s.id?.toString() || s.customerId?.toString() || `${page}-${idx}`;
+          if (seen.has(id)) return null;
+          seen.add(id);
+          return {
+            id,
+            supplier_name: s.name || s.company_name || 'Supplier',
+            company_name: s.company_name || s.name || '',
+            phone_number: s.phone || s.contact1Phone || '',
+          };
+        })
+        .filter(Boolean);
+
+      suppliers.push(...normalized);
+
+      const noMore = batch.length < PAGE_SIZE || normalized.length === 0 || page >= 50;
+      const totalPages = data.total_pages || data.totalPages || data.totalpages;
+      if (noMore || (totalPages && page >= totalPages)) break;
+      page += 1;
     }
-
-    const data = await response.json();
-    const list = Array.isArray(data?.customers ?? data)
-      ? (data.customers ?? data)
-      : Array.isArray(data)
-        ? data
-        : [];
-
-    const suppliers = list.map((s, idx) => ({
-      id: s.id?.toString() || s.customerId?.toString() || `${idx}`,
-      supplier_name: s.name || s.company_name || 'Supplier',
-      company_name: s.company_name || s.name || '',
-      phone_number: s.phone || s.contact1Phone || '',
-    }));
 
     return res.status(200).json({
       success: true,
