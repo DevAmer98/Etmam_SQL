@@ -46,6 +46,16 @@ const ensureTable = async client => {
     );
   `;
   await executeWithRetry(() => withTimeout(client.query(createSql), 10000));
+  const alterStatements = [
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_driver_id TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_driver_name TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_driver_email TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_note TEXT"
+  ];
+  for (const sql of alterStatements) {
+    await executeWithRetry(() => withTimeout(client.query(sql), 10000));
+  }
 };
 
 const sendNotificationToManagers = async (summary, count) => {
@@ -139,7 +149,19 @@ router.get('/requestMaterial', async (_req, res) => {
   try {
     await ensureTable(client);
     const selectSql = `
-      SELECT id, products, request_all, requested_by, note, status, created_at
+      SELECT
+        id,
+        products,
+        request_all,
+        requested_by,
+        note,
+        status,
+        created_at,
+        assigned_driver_id,
+        assigned_driver_name,
+        assigned_driver_email,
+        assigned_at,
+        manager_note
       FROM material_requests
       ORDER BY created_at DESC
     `;
@@ -151,6 +173,55 @@ router.get('/requestMaterial', async (_req, res) => {
   } catch (err) {
     console.error('❌ Failed to fetch material requests:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch material requests' });
+  } finally {
+    client.release();
+  }
+});
+
+// Assign one or more material requests to a driver
+router.post('/requestMaterial/assign', async (req, res) => {
+  const { requestIds = [], driverId = null, driverName = null, driverEmail = null, managerNote = null } =
+    req.body || {};
+
+  const ids = Array.isArray(requestIds)
+    ? requestIds
+        .map(id => parseInt(id, 10))
+        .filter(id => Number.isInteger(id) && id > 0)
+    : [];
+
+  if (!ids.length) {
+    return res.status(400).json({ error: 'No request IDs provided to assign' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+
+    const updateSql = `
+      UPDATE material_requests
+      SET
+        assigned_driver_id = $2,
+        assigned_driver_name = $3,
+        assigned_driver_email = $4,
+        manager_note = $5,
+        status = 'assigned',
+        assigned_at = CURRENT_TIMESTAMP
+      WHERE id = ANY($1::int[])
+      RETURNING id, status, assigned_driver_id, assigned_driver_name, assigned_driver_email, assigned_at, manager_note
+    `;
+
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query(updateSql, [ids, driverId, driverName, driverEmail, managerNote]), 10000)
+    );
+
+    return res.status(200).json({
+      success: true,
+      updated: result.rows || [],
+      message: 'تم تعيين طلبات المواد للسائق بنجاح',
+    });
+  } catch (err) {
+    console.error('❌ Failed to assign material requests:', err);
+    return res.status(500).json({ error: err.message || 'Failed to assign material requests' });
   } finally {
     client.release();
   }
