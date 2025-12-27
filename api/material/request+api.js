@@ -54,7 +54,9 @@ const ensureTable = async client => {
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_note TEXT",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS assigned_quantity NUMERIC",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_id TEXT",
-    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_name TEXT"
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_name TEXT",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS storekeeper_total_quantity NUMERIC",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_quantities JSONB"
   ];
   for (const sql of alterStatements) {
     await executeWithRetry(() => withTimeout(client.query(sql), 10000));
@@ -145,6 +147,14 @@ router.post('/requestMaterial', async (req, res) => {
         section: p.section_name ?? p.category ?? '',
         supplier: p.supplier_name ?? p.vendorName ?? '',
         company: p.company_name ?? p.vendorId ?? '',
+        requested_quantity: (() => {
+          const qty = Number(p.requestedQuantity ?? p.requested_quantity ?? p.request_qty ?? p.requestQty ?? 0);
+          return Number.isFinite(qty) && qty > 0 ? qty : 0;
+        })(),
+        requestedQuantity: (() => {
+          const qty = Number(p.requestedQuantity ?? p.requested_quantity ?? p.request_qty ?? p.requestQty ?? 0);
+          return Number.isFinite(qty) && qty > 0 ? qty : 0;
+        })(),
       }))
     : [];
 
@@ -152,16 +162,19 @@ router.post('/requestMaterial', async (req, res) => {
     return res.status(400).json({ error: 'No products provided for material request' });
   }
 
+  const storekeeperTotalQuantity = normalizedProducts.reduce((sum, p) => sum + (p.requested_quantity || 0), 0);
+  const storekeeperTotalQuantityValue = Number.isFinite(storekeeperTotalQuantity) ? storekeeperTotalQuantity : null;
+
   const client = await pool.connect();
   try {
     await ensureTable(client);
 
     const insertSql = `
-      INSERT INTO material_requests (products, request_all, requested_by, note, status)
-      VALUES ($1, $2, $3, $4, 'pending')
+      INSERT INTO material_requests (products, request_all, requested_by, note, status, storekeeper_total_quantity)
+      VALUES ($1, $2, $3, $4, 'pending', $5)
       RETURNING id, created_at
     `;
-    const insertParams = [JSON.stringify(normalizedProducts), requestAll, requestedBy, note];
+    const insertParams = [JSON.stringify(normalizedProducts), requestAll, requestedBy, note, storekeeperTotalQuantityValue];
     const result = await executeWithRetry(() => withTimeout(client.query(insertSql, insertParams), 10000));
     const requestId = result.rows[0]?.id;
 
@@ -202,7 +215,9 @@ router.get('/requestMaterial', async (_req, res) => {
         manager_note,
         assigned_quantity,
         supplier_id,
-        supplier_name
+        supplier_name,
+        storekeeper_total_quantity,
+        manager_quantities
       FROM material_requests
       ORDER BY created_at DESC
     `;
@@ -295,6 +310,7 @@ router.post('/requestMaterial/assign', async (req, res) => {
     quantity = null,
     supplierId = null,
     supplierName = null,
+    productQuantities = null,
   } = req.body || {};
 
   const ids = Array.isArray(requestIds)
@@ -311,6 +327,35 @@ router.post('/requestMaterial/assign', async (req, res) => {
   try {
     await ensureTable(client);
 
+    const normalizedManagerQuantities = (() => {
+      if (Array.isArray(productQuantities)) {
+        return productQuantities.reduce((acc, p) => {
+          const id = p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
+          const qty = Number(p?.quantity ?? p?.qty ?? p?.requestedQuantity ?? p?.managerQuantity ?? null);
+          if (id && Number.isFinite(qty) && qty > 0) acc[id] = qty;
+          return acc;
+        }, {});
+      }
+      if (productQuantities && typeof productQuantities === 'object') {
+        return Object.entries(productQuantities).reduce((acc, [key, val]) => {
+          const qty = Number(val);
+          if (Number.isFinite(qty) && qty > 0) acc[key] = qty;
+          return acc;
+        }, {});
+      }
+      return {};
+    })();
+
+    const managerQuantitiesJson =
+      Object.keys(normalizedManagerQuantities).length > 0 ? JSON.stringify(normalizedManagerQuantities) : null;
+    const managerQuantitiesSum = Object.values(normalizedManagerQuantities).reduce((sum, v) => sum + Number(v || 0), 0);
+    const assignedQuantityValue =
+      quantity != null && Number.isFinite(Number(quantity))
+        ? Number(quantity)
+        : managerQuantitiesJson
+        ? managerQuantitiesSum || null
+        : null;
+
     const updateSql = `
       UPDATE material_requests
       SET
@@ -321,10 +366,11 @@ router.post('/requestMaterial/assign', async (req, res) => {
         assigned_quantity = $6,
         supplier_id = $7,
         supplier_name = $8,
+        manager_quantities = COALESCE($9, manager_quantities),
         status = 'assigned',
         assigned_at = CURRENT_TIMESTAMP
       WHERE id = ANY($1::int[])
-      RETURNING id, status, assigned_driver_id, assigned_driver_name, assigned_driver_email, assigned_at, manager_note, assigned_quantity, supplier_id, supplier_name
+      RETURNING id, status, assigned_driver_id, assigned_driver_name, assigned_driver_email, assigned_at, manager_note, assigned_quantity, supplier_id, supplier_name, manager_quantities
     `;
 
     const result = await executeWithRetry(() =>
@@ -335,9 +381,10 @@ router.post('/requestMaterial/assign', async (req, res) => {
           driverName,
           driverEmail,
           managerNote,
-          quantity != null ? Number(quantity) : null,
+          assignedQuantityValue,
           supplierId,
           supplierName,
+          managerQuantitiesJson,
         ]),
         10000
       )
