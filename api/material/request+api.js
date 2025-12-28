@@ -61,6 +61,31 @@ const ensureTable = async client => {
   for (const sql of alterStatements) {
     await executeWithRetry(() => withTimeout(client.query(sql), 10000));
   }
+
+  const createItemsSql = `
+    CREATE TABLE IF NOT EXISTS material_request_items (
+      id SERIAL PRIMARY KEY,
+      request_id INT REFERENCES material_requests(id) ON DELETE CASCADE,
+      product_id TEXT,
+      product_code TEXT,
+      product_name TEXT,
+      section TEXT,
+      supplier TEXT,
+      company TEXT,
+      requested_quantity NUMERIC,
+      status TEXT DEFAULT 'pending',
+      assigned_driver_id TEXT,
+      assigned_driver_name TEXT,
+      assigned_driver_email TEXT,
+      assigned_quantity NUMERIC,
+      supplier_id TEXT,
+      supplier_name TEXT,
+      selection_key TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_material_request_items_request ON material_request_items(request_id);
+  `;
+  await executeWithRetry(() => withTimeout(client.query(createItemsSql), 10000));
 };
 
 const sendNotificationToManagers = async (summary, count) => {
@@ -178,6 +203,39 @@ router.post('/requestMaterial', async (req, res) => {
     const result = await executeWithRetry(() => withTimeout(client.query(insertSql, insertParams), 10000));
     const requestId = result.rows[0]?.id;
 
+    // also insert per-product rows for granular assignment
+    if (requestId && Array.isArray(normalizedProducts)) {
+      const itemValues = normalizedProducts.map(p => [
+        requestId,
+        p.id || p.code || null,
+        p.code || null,
+        p.name || 'بدون اسم',
+        p.section || null,
+        p.supplier || null,
+        p.company || null,
+        Number(p.requested_quantity || p.requestedQuantity || 0) || 0,
+        'pending',
+        p.code || p.id || null,
+      ]);
+
+      const valuesSql = itemValues
+        .map(
+          (_, idx) =>
+            `($${idx * 10 + 1}, $${idx * 10 + 2}, $${idx * 10 + 3}, $${idx * 10 + 4}, $${idx * 10 + 5}, $${idx * 10 + 6}, $${idx * 10 + 7}, $${idx * 10 + 8}, $${idx * 10 + 9}, $${idx * 10 + 10})`,
+        )
+        .join(', ');
+
+      const flatParams = itemValues.flat();
+      const insertItemsSql = `
+        INSERT INTO material_request_items
+        (request_id, product_id, product_code, product_name, section, supplier, company, requested_quantity, status, selection_key)
+        VALUES ${valuesSql}
+      `;
+      if (itemValues.length) {
+        await executeWithRetry(() => withTimeout(client.query(insertItemsSql, flatParams), 10000));
+      }
+    }
+
     const summary = requestAll ? 'طلب جميع المنتجات' : 'طلب مواد محددة';
     await sendNotificationToManagers(summary, normalizedProducts.length);
 
@@ -201,25 +259,28 @@ router.get('/requestMaterial', async (_req, res) => {
     await ensureTable(client);
     const selectSql = `
       SELECT
-        id,
-        products,
-        request_all,
-        requested_by,
-        note,
-        status,
-        created_at,
-        assigned_driver_id,
-        assigned_driver_name,
-        assigned_driver_email,
-        assigned_at,
-        manager_note,
-        assigned_quantity,
-        supplier_id,
-        supplier_name,
-        storekeeper_total_quantity,
-        manager_quantities
-      FROM material_requests
-      ORDER BY created_at DESC
+        mr.id,
+        mr.products,
+        mr.request_all,
+        mr.requested_by,
+        mr.note,
+        mr.status,
+        mr.created_at,
+        mr.assigned_driver_id,
+        mr.assigned_driver_name,
+        mr.assigned_driver_email,
+        mr.assigned_at,
+        mr.manager_note,
+        mr.assigned_quantity,
+        mr.supplier_id,
+        mr.supplier_name,
+        mr.storekeeper_total_quantity,
+        mr.manager_quantities,
+        COALESCE(json_agg(mri.*) FILTER (WHERE mri.id IS NOT NULL), '[]') AS items
+      FROM material_requests mr
+      LEFT JOIN material_request_items mri ON mri.request_id = mr.id
+      GROUP BY mr.id
+      ORDER BY mr.created_at DESC
     `;
     const result = await executeWithRetry(() => withTimeout(client.query(selectSql), 10000));
     return res.status(200).json({
@@ -330,7 +391,7 @@ router.post('/requestMaterial/assign', async (req, res) => {
     const normalizedManagerQuantities = (() => {
       if (Array.isArray(productQuantities)) {
         return productQuantities.reduce((acc, p) => {
-          const id = p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
+          const id = p?.selectionKey ?? p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
           const qty = Number(p?.quantity ?? p?.qty ?? p?.requestedQuantity ?? p?.managerQuantity ?? null);
           if (id && Number.isFinite(qty) && qty > 0) acc[id] = qty;
           return acc;
@@ -389,6 +450,45 @@ router.post('/requestMaterial/assign', async (req, res) => {
         10000
       )
     );
+
+    // Update child items with per-product quantities and assignment metadata
+    if (Array.isArray(productQuantities) && productQuantities.length) {
+      for (const pq of productQuantities) {
+        const selectionKey = pq.selectionKey ?? pq.id ?? pq.code ?? pq.productNo ?? pq.product_id ?? null;
+        if (!selectionKey) continue;
+        const qty = Number(pq.quantity ?? pq.qty ?? pq.requestedQuantity ?? pq.managerQuantity ?? null);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const reqId = pq.requestId || pq.request_id || (ids.length === 1 ? ids[0] : null);
+        if (!reqId) continue;
+        const updateItemSql = `
+          UPDATE material_request_items
+          SET
+            status = 'assigned',
+            assigned_driver_id = $4,
+            assigned_driver_name = $5,
+            assigned_driver_email = $6,
+            assigned_quantity = $3,
+            supplier_id = $7,
+            supplier_name = $8
+          WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
+        `;
+        await executeWithRetry(() =>
+          withTimeout(
+            client.query(updateItemSql, [
+              reqId,
+              selectionKey,
+              qty,
+              driverId,
+              driverName,
+              driverEmail,
+              supplierId,
+              supplierName,
+            ]),
+            10000
+          )
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,
