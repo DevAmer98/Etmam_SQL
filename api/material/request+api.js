@@ -392,7 +392,7 @@ router.post('/requestMaterial/assign', async (req, res) => {
       if (Array.isArray(productQuantities)) {
         return productQuantities.reduce((acc, p) => {
           const id = p?.selectionKey ?? p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
-          const qty = Number(p?.quantity ?? p?.qty ?? p?.requestedQuantity ?? p?.managerQuantity ?? null);
+          const qty = Number(p?.managerQuantity ?? p?.quantity ?? p?.qty ?? null);
           if (id && Number.isFinite(qty) && qty > 0) acc[id] = qty;
           return acc;
         }, {});
@@ -456,7 +456,7 @@ router.post('/requestMaterial/assign', async (req, res) => {
       for (const pq of productQuantities) {
         const selectionKey = pq.selectionKey ?? pq.id ?? pq.code ?? pq.productNo ?? pq.product_id ?? null;
         if (!selectionKey) continue;
-        const qty = Number(pq.quantity ?? pq.qty ?? pq.requestedQuantity ?? pq.managerQuantity ?? null);
+        const qty = Number(pq.managerQuantity ?? pq.quantity ?? pq.qty ?? null);
         if (!Number.isFinite(qty) || qty <= 0) continue;
         const reqId = pq.requestId || pq.request_id || (ids.length === 1 ? ids[0] : null);
         if (!reqId) continue;
