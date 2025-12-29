@@ -56,7 +56,10 @@ const ensureTable = async client => {
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_id TEXT",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_name TEXT",
     "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS storekeeper_total_quantity NUMERIC",
-    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_quantities JSONB"
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS manager_quantities JSONB",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_requested BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_requested_at TIMESTAMPTZ",
+    "ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS supplier_requested_by TEXT"
   ];
   for (const sql of alterStatements) {
     await executeWithRetry(() => withTimeout(client.query(sql), 10000));
@@ -80,12 +83,21 @@ const ensureTable = async client => {
       assigned_quantity NUMERIC,
       supplier_id TEXT,
       supplier_name TEXT,
+      supplier_requested BOOLEAN DEFAULT FALSE,
+      supplier_assigned_quantity NUMERIC,
       selection_key TEXT,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_material_request_items_request ON material_request_items(request_id);
   `;
   await executeWithRetry(() => withTimeout(client.query(createItemsSql), 10000));
+  const alterItemStatements = [
+    "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS supplier_requested BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS supplier_assigned_quantity NUMERIC"
+  ];
+  for (const sql of alterItemStatements) {
+    await executeWithRetry(() => withTimeout(client.query(sql), 10000));
+  }
 };
 
 const sendNotificationToManagers = async (summary, count) => {
@@ -498,6 +510,113 @@ router.post('/requestMaterial/assign', async (req, res) => {
   } catch (err) {
     console.error('❌ Failed to assign material requests:', err);
     return res.status(500).json({ error: err.message || 'Failed to assign material requests' });
+  } finally {
+    client.release();
+  }
+});
+
+// Request materials directly from supplier (mark items as supplier-requested)
+router.post('/requestMaterial/requestSupplier', async (req, res) => {
+  const {
+    requestIds = [],
+    supplierId = null,
+    supplierName = null,
+    productQuantities = null,
+    requestedBy = null,
+  } = req.body || {};
+
+  const ids = Array.isArray(requestIds)
+    ? requestIds
+        .map(id => parseInt(id, 10))
+        .filter(id => Number.isInteger(id) && id > 0)
+    : [];
+
+  if (!ids.length) {
+    return res.status(400).json({ error: 'No request IDs provided to mark as supplier requested' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+
+    const normalizedManagerQuantities = (() => {
+      if (Array.isArray(productQuantities)) {
+        return productQuantities.reduce((acc, p) => {
+          const id = p?.selectionKey ?? p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
+          const qty = Number(p?.managerQuantity ?? p?.quantity ?? p?.qty ?? null);
+          if (id && Number.isFinite(qty) && qty > 0) acc[id] = qty;
+          return acc;
+        }, {});
+      }
+      if (productQuantities && typeof productQuantities === 'object') {
+        return Object.entries(productQuantities).reduce((acc, [key, val]) => {
+          const qty = Number(val);
+          if (Number.isFinite(qty) && qty > 0) acc[key] = qty;
+          return acc;
+        }, {});
+      }
+      return {};
+    })();
+
+    const managerQuantitiesJson =
+      Object.keys(normalizedManagerQuantities).length > 0 ? JSON.stringify(normalizedManagerQuantities) : null;
+    const managerQuantitiesSum = Object.values(normalizedManagerQuantities).reduce((sum, v) => sum + Number(v || 0), 0);
+    const assignedQuantityValue = managerQuantitiesJson ? managerQuantitiesSum || null : null;
+
+    const updateSql = `
+      UPDATE material_requests
+      SET
+        supplier_id = $2,
+        supplier_name = $3,
+        manager_quantities = COALESCE($4, manager_quantities),
+        assigned_quantity = COALESCE($5, assigned_quantity),
+        supplier_requested = TRUE,
+        supplier_requested_at = CURRENT_TIMESTAMP,
+        supplier_requested_by = COALESCE($6, supplier_requested_by),
+        status = 'requested'
+      WHERE id = ANY($1::int[])
+      RETURNING id, status, supplier_id, supplier_name, supplier_requested, supplier_requested_at, manager_quantities, assigned_quantity
+    `;
+
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query(updateSql, [ids, supplierId, supplierName, managerQuantitiesJson, assignedQuantityValue, requestedBy]), 10000)
+    );
+
+    if (Array.isArray(productQuantities) && productQuantities.length) {
+      for (const pq of productQuantities) {
+        const selectionKey = pq.selectionKey ?? pq.id ?? pq.code ?? pq.productNo ?? pq.product_id ?? null;
+        if (!selectionKey) continue;
+        const qty = Number(pq.managerQuantity ?? pq.quantity ?? pq.qty ?? null);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const reqId = pq.requestId || pq.request_id || (ids.length === 1 ? ids[0] : null);
+        if (!reqId) continue;
+        const updateItemSql = `
+          UPDATE material_request_items
+          SET
+            status = 'requested',
+            supplier_requested = TRUE,
+            supplier_assigned_quantity = $3,
+            supplier_id = $4,
+            supplier_name = $5
+          WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
+        `;
+        await executeWithRetry(() =>
+          withTimeout(
+            client.query(updateItemSql, [reqId, selectionKey, qty, supplierId, supplierName]),
+            10000
+          )
+        );
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      updated: result.rows || [],
+      message: 'تم إرسال الطلب للمورد بنجاح',
+    });
+  } catch (err) {
+    console.error('❌ Failed to request materials from supplier:', err);
+    return res.status(500).json({ error: err.message || 'Failed to request materials from supplier' });
   } finally {
     client.release();
   }
