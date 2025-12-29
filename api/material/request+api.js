@@ -288,6 +288,9 @@ router.get('/requestMaterial', async (_req, res) => {
         mr.supplier_name,
         mr.storekeeper_total_quantity,
         mr.manager_quantities,
+        mr.supplier_requested,
+        mr.supplier_requested_at,
+        mr.supplier_requested_by,
         COALESCE(json_agg(mri.*) FILTER (WHERE mri.id IS NOT NULL), '[]') AS items
       FROM material_requests mr
       LEFT JOIN material_request_items mri ON mri.request_id = mr.id
