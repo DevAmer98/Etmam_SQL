@@ -692,6 +692,7 @@ router.post('/requestMaterial/markDone', async (req, res) => {
           assigned_driver_email = COALESCE($6, assigned_driver_email)
         WHERE request_id = $1
           AND (
+            id::text = ANY($2::text[]) OR
             selection_key = ANY($2::text[])
             OR product_code = ANY($2::text[])
             OR product_id = ANY($2::text[])
