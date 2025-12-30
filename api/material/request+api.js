@@ -667,11 +667,11 @@ router.post('/requestMaterial/markDone', async (req, res) => {
       const updateItemSql = `
         UPDATE material_request_items
         SET
-          status = $4,
+          status = $3,
           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
-          assigned_driver_id = COALESCE($5, assigned_driver_id),
-          assigned_driver_name = COALESCE($6, assigned_driver_name),
-          assigned_driver_email = COALESCE($7, assigned_driver_email)
+          assigned_driver_id = COALESCE($4, assigned_driver_id),
+          assigned_driver_name = COALESCE($5, assigned_driver_name),
+          assigned_driver_email = COALESCE($6, assigned_driver_email)
         WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
         RETURNING id, request_id, product_id, product_code, status
       `;
@@ -679,7 +679,6 @@ router.post('/requestMaterial/markDone', async (req, res) => {
         withTimeout(
           client.query(updateItemSql, [
             item.requestId,
-            item.selectionKey,
             item.selectionKey,
             item.status,
             driverId,
