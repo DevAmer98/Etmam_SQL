@@ -697,19 +697,18 @@ router.post('/requestMaterial/markDone', async (req, res) => {
 
     const completedRequests = [];
     for (const reqId of touchedRequestIds) {
-      const placeholders = DONE_STATUSES.map((_, idx) => `$${idx + 2}`).join(', ');
       const updateParentSql = `
         UPDATE material_requests
         SET status = 'completed', assigned_at = COALESCE(assigned_at, CURRENT_TIMESTAMP)
         WHERE id = $1
           AND NOT EXISTS (
             SELECT 1 FROM material_request_items
-            WHERE request_id = $1 AND status NOT IN (${placeholders})
+            WHERE request_id = $1 AND status <> ALL($2::text[])
           )
         RETURNING id, status
       `;
       const parentRes = await executeWithRetry(() =>
-        withTimeout(client.query(updateParentSql, [reqId, ...DONE_STATUSES]), 10000),
+        withTimeout(client.query(updateParentSql, [reqId, DONE_STATUSES]), 10000),
       );
       if (parentRes.rows.length) {
         completedRequests.push(parentRes.rows[0]);
