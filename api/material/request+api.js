@@ -93,7 +93,8 @@ const ensureTable = async client => {
   await executeWithRetry(() => withTimeout(client.query(createItemsSql), 10000));
   const alterItemStatements = [
     "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS supplier_requested BOOLEAN DEFAULT FALSE",
-    "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS supplier_assigned_quantity NUMERIC"
+    "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS supplier_assigned_quantity NUMERIC",
+    "ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ"
   ];
   for (const sql of alterItemStatements) {
     await executeWithRetry(() => withTimeout(client.query(sql), 10000));
@@ -136,6 +137,8 @@ const sendNotificationToManagers = async (summary, count) => {
     client.release();
   }
 };
+
+const DONE_STATUSES = ['completed', 'delivered', 'done', 'ordered', 'approved', 'supplied'];
 
 // Medad token helper (used to fetch suppliers from Medad API)
 let cachedToken = null;
@@ -620,6 +623,108 @@ router.post('/requestMaterial/requestSupplier', async (req, res) => {
   } catch (err) {
     console.error('❌ Failed to request materials from supplier:', err);
     return res.status(500).json({ error: err.message || 'Failed to request materials from supplier' });
+  } finally {
+    client.release();
+  }
+});
+
+// Mark one or more material request items as completed/ordered/delivered
+router.post('/requestMaterial/markDone', async (req, res) => {
+  const { items = [], status = 'completed', driverId = null, driverName = null, driverEmail = null } = req.body || {};
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'No items provided to update' });
+  }
+
+  const normalizedItems = items
+    .map(it => {
+      const requestId = parseInt(it.requestId ?? it.reqId ?? it.id ?? it.request_id, 10);
+      const selectionKey =
+        it.selectionKey ??
+        it.productKey ??
+        it.product_code ??
+        it.productId ??
+        it.product_id ??
+        it.code ??
+        null;
+      if (!Number.isInteger(requestId) || requestId <= 0 || !selectionKey) return null;
+      const normalizedStatus = (it.status || status || 'completed').toString().toLowerCase();
+      return { requestId, selectionKey, status: normalizedStatus };
+    })
+    .filter(Boolean);
+
+  if (!normalizedItems.length) {
+    return res.status(400).json({ error: 'No valid items to update' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+
+    const updatedRows = [];
+    const touchedRequestIds = new Set();
+    for (const item of normalizedItems) {
+      const updateItemSql = `
+        UPDATE material_request_items
+        SET
+          status = $4,
+          delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+          assigned_driver_id = COALESCE($5, assigned_driver_id),
+          assigned_driver_name = COALESCE($6, assigned_driver_name),
+          assigned_driver_email = COALESCE($7, assigned_driver_email)
+        WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
+        RETURNING id, request_id, product_id, product_code, status
+      `;
+      const resUpdate = await executeWithRetry(() =>
+        withTimeout(
+          client.query(updateItemSql, [
+            item.requestId,
+            item.selectionKey,
+            item.selectionKey,
+            item.status,
+            driverId,
+            driverName,
+            driverEmail,
+          ]),
+          10000,
+        ),
+      );
+      if (resUpdate.rows.length) {
+        updatedRows.push(...resUpdate.rows);
+        touchedRequestIds.add(item.requestId);
+      }
+    }
+
+    const completedRequests = [];
+    for (const reqId of touchedRequestIds) {
+      const placeholders = DONE_STATUSES.map((_, idx) => `$${idx + 2}`).join(', ');
+      const updateParentSql = `
+        UPDATE material_requests
+        SET status = 'completed', assigned_at = COALESCE(assigned_at, CURRENT_TIMESTAMP)
+        WHERE id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM material_request_items
+            WHERE request_id = $1 AND status NOT IN (${placeholders})
+          )
+        RETURNING id, status
+      `;
+      const parentRes = await executeWithRetry(() =>
+        withTimeout(client.query(updateParentSql, [reqId, ...DONE_STATUSES]), 10000),
+      );
+      if (parentRes.rows.length) {
+        completedRequests.push(parentRes.rows[0]);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      updatedCount: updatedRows.length,
+      updatedItems: updatedRows,
+      completedRequests,
+    });
+  } catch (err) {
+    console.error('❌ Failed to mark material items done:', err);
+    return res.status(500).json({ error: err.message || 'Failed to mark items done' });
   } finally {
     client.release();
   }
