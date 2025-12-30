@@ -666,14 +666,20 @@ router.post('/requestMaterial/markDone', async (req, res) => {
     const updatedRows = [];
     const touchedRequestIds = new Set();
     for (const item of normalizedItems) {
-      const keyCandidates = [
-        item.selectionKey,
-        item.selectionKey?.toString?.(),
-        item.productId,
-        item.productId?.toString?.(),
-        item.productCode,
-        item.productCode?.toString?.(),
-      ].filter(Boolean);
+      const keyCandidates = Array.from(
+        new Set(
+          [
+            item.selectionKey,
+            item.selectionKey?.toString?.(),
+            item.productId,
+            item.productId?.toString?.(),
+            item.productCode,
+            item.productCode?.toString?.(),
+          ]
+            .filter(Boolean)
+            .map(k => k.toString().trim()),
+        ),
+      );
       if (!keyCandidates.length) continue;
 
       const updateItemSql = `
@@ -709,6 +715,10 @@ router.post('/requestMaterial/markDone', async (req, res) => {
         updatedRows.push(...resUpdate.rows);
         touchedRequestIds.add(item.requestId);
       }
+    }
+
+    if (!updatedRows.length) {
+      return res.status(404).json({ error: 'No matching items were updated' });
     }
 
     const completedRequests = [];
