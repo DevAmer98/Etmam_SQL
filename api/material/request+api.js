@@ -647,9 +647,11 @@ router.post('/requestMaterial/markDone', async (req, res) => {
         it.product_id ??
         it.code ??
         null;
-      if (!Number.isInteger(requestId) || requestId <= 0 || !selectionKey) return null;
+      const productId = it.productId ?? it.product_id ?? null;
+      const productCode = it.product_code ?? it.code ?? null;
+      if (!Number.isInteger(requestId) || requestId <= 0 || (!selectionKey && !productId && !productCode)) return null;
       const normalizedStatus = (it.status || status || 'completed').toString().toLowerCase();
-      return { requestId, selectionKey, status: normalizedStatus };
+      return { requestId, selectionKey, productId, productCode, status: normalizedStatus };
     })
     .filter(Boolean);
 
@@ -664,6 +666,16 @@ router.post('/requestMaterial/markDone', async (req, res) => {
     const updatedRows = [];
     const touchedRequestIds = new Set();
     for (const item of normalizedItems) {
+      const keyCandidates = [
+        item.selectionKey,
+        item.selectionKey?.toString?.(),
+        item.productId,
+        item.productId?.toString?.(),
+        item.productCode,
+        item.productCode?.toString?.(),
+      ].filter(Boolean);
+      if (!keyCandidates.length) continue;
+
       const updateItemSql = `
         UPDATE material_request_items
         SET
@@ -672,14 +684,19 @@ router.post('/requestMaterial/markDone', async (req, res) => {
           assigned_driver_id = COALESCE($4, assigned_driver_id),
           assigned_driver_name = COALESCE($5, assigned_driver_name),
           assigned_driver_email = COALESCE($6, assigned_driver_email)
-        WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
+        WHERE request_id = $1
+          AND (
+            selection_key = ANY($2::text[])
+            OR product_code = ANY($2::text[])
+            OR product_id = ANY($2::text[])
+          )
         RETURNING id, request_id, product_id, product_code, status
       `;
       const resUpdate = await executeWithRetry(() =>
         withTimeout(
           client.query(updateItemSql, [
             item.requestId,
-            item.selectionKey,
+            keyCandidates,
             item.status,
             driverId,
             driverName,
