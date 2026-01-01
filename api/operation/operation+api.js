@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import pg from 'pg';
 import sgMail from '@sendgrid/mail';
-import { asyncHandler } from '../..//utils/asyncHandler.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 const { Pool } = pg;
 const router = Router();
@@ -11,7 +11,7 @@ const router = Router();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: false,  // ✅ Disable SSL
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
@@ -19,7 +19,9 @@ const pool = new Pool({
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 // Initialize SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 // === Utility Functions ===
 const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
@@ -166,22 +168,30 @@ router.get(
       const nameQuery = req.query.query || '';
       const offset = (page - 1) * limit;
 
-      const query = `
+      const dataQuery = `
         SELECT * FROM operations
         WHERE name ILIKE $3
         ORDER BY created_at DESC
         LIMIT $1 OFFSET $2
       `;
+      const countQuery = `
+        SELECT COUNT(*)::int AS total FROM operations
+        WHERE name ILIKE $1
+      `;
 
-      const result = await executeWithRetry(() =>
-        withTimeout(client.query(query, [limit, offset, `%${nameQuery}%`]), 10000)
-      );
+      const [result, countResult] = await Promise.all([
+        executeWithRetry(() => withTimeout(client.query(dataQuery, [limit, offset, `%${nameQuery}%`]), 10000)),
+        executeWithRetry(() => withTimeout(client.query(countQuery, [`%${nameQuery}%`]), 10000)),
+      ]);
+
+      const total = countResult.rows[0]?.total ?? 0;
 
       res.status(200).json({
         success: true,
-        managers: result.rows,
+        operations: result.rows,
         currentPage: page,
-        totalPages: Math.ceil(result.rows.length / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        total,
       });
     } finally {
       client.release();
