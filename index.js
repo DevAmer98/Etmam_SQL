@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import managerApi from './api/manager/manager+api.js';
+import operationApi from './api/operation/operation+api.js';
 import medadProducts from './api/medadProducts.js';
 import medadProductDetails from './api/medadProductDetails.js';
 import singleManagerApi from './api/manager/[id]+api.js';
@@ -100,6 +101,7 @@ app.get('/api/medad/products/:productNo', medadProductDetails);
 
 // Mount the API routes under /api
 app.use('/api', managerApi);
+app.use('/api', operationApi);
 app.use('/api', accountantApi);
 app.use('/api', supervisorApi);
 app.use('/api', storekeeperApi);
