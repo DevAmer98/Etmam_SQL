@@ -65,6 +65,7 @@ import requestMaterialApi from './api/material/request+api.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { Pool } from 'pg';
 import medadCustomersApi from './api/medad/customers+api.js';
+import medadClientsApi from './api/client/medad/clients+api.js';
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -158,6 +159,7 @@ app.use('/api', rejectedQuotationApi);
 app.use('/api', userWarehouseApi);
 app.use('/api/material', requestMaterialApi);
 app.use('/api', medadCustomersApi);
+app.use('/api', medadClientsApi);
 
 
 
