@@ -76,4 +76,58 @@ router.get('/medad/customers', asyncHandler(async (req, res) => {
   }
 }));
 
+// GET /api/medad/linked?search=&page=&limit=
+router.get('/medad/linked', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const limit = parseInt(req.query.limit || '10', 10);
+    const page = parseInt(req.query.page || '1', 10);
+    const search = `%${req.query.search || ''}%`;
+    const offset = (page - 1) * limit;
+
+    const hasSearch = !!req.query.search;
+    const whereClause = hasSearch
+      ? 'WHERE CAST(client_id AS TEXT) ILIKE $1 OR CAST(medad_customer_id AS TEXT) ILIKE $1'
+      : '';
+
+    const linkedQuery = `
+      SELECT *
+      FROM client_medad_customers
+      ${whereClause}
+      ORDER BY id DESC
+      LIMIT $${hasSearch ? 2 : 1} OFFSET $${hasSearch ? 3 : 2}
+    `;
+
+    const linkedResult = await executeWithRetry(() =>
+      withTimeout(
+        client.query(linkedQuery, hasSearch ? [search, limit, offset] : [limit, offset]),
+        10000
+      )
+    );
+
+    const countQuery = `
+      SELECT COUNT(*) AS count
+      FROM client_medad_customers
+      ${whereClause}
+    `;
+
+    const countResult = await executeWithRetry(() =>
+      withTimeout(client.query(countQuery, hasSearch ? [search] : []), 10000)
+    );
+
+    const total = parseInt(countResult.rows[0]?.count || '0', 10);
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      linked: linkedResult.rows,
+      total,
+      page,
+      totalPages,
+      limit,
+    });
+  } finally {
+    client.release();
+  }
+}));
+
 export default router;
