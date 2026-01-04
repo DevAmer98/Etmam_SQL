@@ -91,10 +91,24 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
       : '';
 
     const linkedQuery = `
-      SELECT *
-      FROM client_medad_customers
+      SELECT
+        cmc.*,
+        COALESCE(c.client_name, c.company_name) AS app_client_name,
+        c.company_name AS app_company_name,
+        c.phone_number AS app_phone,
+        c.tax_number AS app_tax,
+        COALESCE(m.customer_name, cmc.medad_customer_id::text) AS medad_customer_name,
+        m.vat_no AS medad_vat,
+        m.phone AS medad_phone,
+        m.balance AS medad_balance,
+        m.credit_limit AS medad_credit_limit,
+        m.credit_days AS medad_credit_days,
+        m.salesman_name AS medad_salesman
+      FROM client_medad_customers cmc
+      LEFT JOIN clients c ON CAST(c.id AS TEXT) = CAST(cmc.client_id AS TEXT)
+      LEFT JOIN medad_customers_import m ON CAST(m.medad_customer_id AS TEXT) = CAST(cmc.medad_customer_id AS TEXT)
       ${whereClause}
-      ORDER BY id DESC
+      ORDER BY cmc.id DESC
       LIMIT $${hasSearch ? 2 : 1} OFFSET $${hasSearch ? 3 : 2}
     `;
 
