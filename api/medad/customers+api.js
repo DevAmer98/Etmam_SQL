@@ -82,13 +82,30 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '10', 10);
     const page = parseInt(req.query.page || '1', 10);
-    const search = `%${req.query.search || ''}%`;
     const offset = (page - 1) * limit;
 
-    const hasSearch = !!req.query.search;
-    const whereClause = hasSearch
-      ? 'WHERE CAST(cmc.client_id AS TEXT) ILIKE $1 OR CAST(cmc.medad_customer_id AS TEXT) ILIKE $1'
-      : '';
+    const whereParts = [];
+    const params = [];
+    const rawSearch = (req.query.search || '').toString().trim();
+    if (rawSearch) {
+      const likeTerm = `%${rawSearch}%`;
+      params.push(likeTerm);
+      const likeIdx = params.length;
+      whereParts.push(
+        `(COALESCE(c.client_name, c.company_name, '') ILIKE $${likeIdx} OR COALESCE(m.customer_name, '') ILIKE $${likeIdx})`
+      );
+
+      const numericTerm = rawSearch.replace(/\s+/g, '');
+      if (numericTerm) {
+        params.push(numericTerm);
+        const numIdx = params.length;
+        whereParts.push(`(CAST(cmc.client_id AS TEXT) = $${numIdx} OR CAST(cmc.medad_customer_id AS TEXT) = $${numIdx})`);
+      }
+    }
+
+    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' OR ')}` : '';
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
 
     const linkedQuery = `
       SELECT
@@ -109,12 +126,12 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
       LEFT JOIN medad_customers_import m ON CAST(m.medad_customer_id AS TEXT) = CAST(cmc.medad_customer_id AS TEXT)
       ${whereClause}
       ORDER BY cmc.id DESC
-      LIMIT $${hasSearch ? 2 : 1} OFFSET $${hasSearch ? 3 : 2}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
 
     const linkedResult = await executeWithRetry(() =>
       withTimeout(
-        client.query(linkedQuery, hasSearch ? [search, limit, offset] : [limit, offset]),
+        client.query(linkedQuery, [...params, limit, offset]),
         10000
       )
     );
@@ -126,7 +143,7 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
     `;
 
     const countResult = await executeWithRetry(() =>
-      withTimeout(client.query(countQuery, hasSearch ? [search] : []), 10000)
+      withTimeout(client.query(countQuery, params), 10000)
     );
 
     const total = parseInt(countResult.rows[0]?.count || '0', 10);
