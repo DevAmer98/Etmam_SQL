@@ -164,4 +164,62 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
   }
 }));
 
+// POST /api/medad/links
+router.post('/medad/links', asyncHandler(async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const clientId = req.body.clientId ?? req.body.client_id;
+    const medadCustomerId = req.body.medadCustomerId ?? req.body.medad_customer_id;
+    const vatNo = req.body.vatNo ?? req.body.vat_no;
+    const branchName = req.body.branchName ?? req.body.branch_name ?? null;
+    const salesmanId = req.body.salesmanId ?? req.body.salesman_id ?? null;
+    const salesmanName = req.body.salesmanName ?? req.body.salesman_name ?? null;
+    const isDefault = Boolean(req.body.isDefault ?? req.body.is_default ?? false);
+
+    if (!clientId || !medadCustomerId || !vatNo) {
+      return res.status(400).json({ error: 'clientId, medadCustomerId, and vatNo are required' });
+    }
+
+    const existsQuery = `
+      SELECT id FROM client_medad_customers
+      WHERE CAST(medad_customer_id AS TEXT) = CAST($1 AS TEXT)
+         OR (CAST(client_id AS TEXT) = CAST($2 AS TEXT) AND CAST(medad_customer_id AS TEXT) = CAST($1 AS TEXT))
+      LIMIT 1
+    `;
+
+    const existsResult = await executeWithRetry(() =>
+      withTimeout(client.query(existsQuery, [medadCustomerId, clientId]), 10000)
+    );
+
+    if (existsResult.rows.length > 0) {
+      return res.status(409).json({ error: 'Link already exists for this Medad customer' });
+    }
+
+    const insertQuery = `
+      INSERT INTO client_medad_customers (client_id, medad_customer_id, vat_no, branch_name, salesman_id, salesman_name, is_default)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+
+    const insertResult = await executeWithRetry(() =>
+      withTimeout(
+        client.query(insertQuery, [
+          clientId,
+          medadCustomerId,
+          vatNo,
+          branchName,
+          salesmanId,
+          salesmanName,
+          isDefault,
+        ]),
+        10000
+      )
+    );
+
+    return res.status(201).json({ link: insertResult.rows[0] });
+  } finally {
+    client.release();
+  }
+}));
+
 export default router;
