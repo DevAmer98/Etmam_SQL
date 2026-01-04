@@ -87,7 +87,7 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
 
     const hasSearch = !!req.query.search;
     const whereClause = hasSearch
-      ? 'WHERE CAST(client_id AS TEXT) ILIKE $1 OR CAST(medad_customer_id AS TEXT) ILIKE $1'
+      ? 'WHERE CAST(cmc.client_id AS TEXT) ILIKE $1 OR CAST(cmc.medad_customer_id AS TEXT) ILIKE $1'
       : '';
 
     const linkedQuery = `
@@ -121,7 +121,7 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
 
     const countQuery = `
       SELECT COUNT(*) AS count
-      FROM client_medad_customers
+      FROM client_medad_customers cmc
       ${whereClause}
     `;
 
