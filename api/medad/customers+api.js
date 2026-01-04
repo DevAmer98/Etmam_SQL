@@ -91,6 +91,7 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
       const likeTerm = `%${rawSearch}%`;
       params.push(likeTerm);
       const likeIdx = params.length;
+      // Match on names in joined tables; joins follow below in the main query
       whereParts.push(
         `(COALESCE(c.client_name, c.company_name, '') ILIKE $${likeIdx} OR COALESCE(m.customer_name, '') ILIKE $${likeIdx})`
       );
@@ -139,6 +140,8 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM client_medad_customers cmc
+      LEFT JOIN clients c ON CAST(c.id AS TEXT) = CAST(cmc.client_id AS TEXT)
+      LEFT JOIN medad_customers_import m ON CAST(m.medad_customer_id AS TEXT) = CAST(cmc.medad_customer_id AS TEXT)
       ${whereClause}
     `;
 
