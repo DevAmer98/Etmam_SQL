@@ -172,8 +172,9 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
     const medadCustomerId = req.body.medadCustomerId ?? req.body.medad_customer_id;
     const vatNo = req.body.vatNo ?? req.body.vat_no;
     const branchName = req.body.branchName ?? req.body.branch_name ?? null;
-    const salesmanId = req.body.salesmanId ?? req.body.salesman_id ?? null;
-    const salesmanName = req.body.salesmanName ?? req.body.salesman_name ?? null;
+    const salesmanIncoming = req.body.salesmanName ?? req.body.salesman_name ?? req.body.salesmanId ?? req.body.salesman_id ?? null;
+    const salesmanId = salesmanIncoming;
+    const salesmanName = salesmanIncoming;
     const isDefault = Boolean(req.body.isDefault ?? req.body.is_default ?? false);
 
     if (!clientId || !medadCustomerId || !vatNo) {
