@@ -76,7 +76,7 @@ router.get(
     // Normalize shape to always include items/page/limit/totalPages if present
     const items = data.items || data.data || (Array.isArray(data) ? data : []);
     const total = data.total ?? data.total_items ?? data.totalItems ?? items.length;
-    const totalPages = data.total_pages ?? data.totalPages ?? Math.ceil(total / limit) || 1;
+    const totalPages = data.total_pages ?? data.totalPages ?? (Math.ceil(total / limit) || 1);
 
     return res.status(200).json({
       items,
