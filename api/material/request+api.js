@@ -628,6 +628,97 @@ router.post('/requestMaterial/requestSupplier', async (req, res) => {
   }
 });
 
+// Approve material requests with manager quantities (no assignment yet)
+router.post('/requestMaterial/approve', async (req, res) => {
+  const { requestIds = [], productQuantities = null, managerNote = null } = req.body || {};
+
+  const ids = Array.isArray(requestIds)
+    ? requestIds
+        .map(id => parseInt(id, 10))
+        .filter(id => Number.isInteger(id) && id > 0)
+    : [];
+
+  if (!ids.length) {
+    return res.status(400).json({ error: 'No request IDs provided to approve' });
+  }
+
+  const normalizedManagerQuantities = (() => {
+    if (Array.isArray(productQuantities)) {
+      return productQuantities.reduce((acc, p) => {
+        const id = p?.selectionKey ?? p?.id ?? p?.code ?? p?.productNo ?? p?.product_id ?? null;
+        const qty = Number(p?.managerQuantity ?? p?.quantity ?? p?.qty ?? null);
+        if (id && Number.isFinite(qty) && qty > 0) acc[id] = qty;
+        return acc;
+      }, {});
+    }
+    if (productQuantities && typeof productQuantities === 'object') {
+      return Object.entries(productQuantities).reduce((acc, [key, val]) => {
+        const qty = Number(val);
+        if (Number.isFinite(qty) && qty > 0) acc[key] = qty;
+        return acc;
+      }, {});
+    }
+    return {};
+  })();
+
+  if (!Object.keys(normalizedManagerQuantities).length) {
+    return res.status(400).json({ error: 'No valid product quantities provided to approve' });
+  }
+
+  const managerQuantitiesJson = JSON.stringify(normalizedManagerQuantities);
+
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+
+    const updateSql = `
+      UPDATE material_requests
+      SET
+        manager_quantities = COALESCE(manager_quantities, '{}'::jsonb) || $2::jsonb,
+        manager_note = COALESCE($3, manager_note),
+        status = 'approved'
+      WHERE id = ANY($1::int[])
+      RETURNING id, status, manager_quantities, manager_note
+    `;
+
+    const result = await executeWithRetry(() =>
+      withTimeout(client.query(updateSql, [ids, managerQuantitiesJson, managerNote]), 10000)
+    );
+
+    if (Array.isArray(productQuantities) && productQuantities.length) {
+      for (const pq of productQuantities) {
+        const selectionKey = pq.selectionKey ?? pq.id ?? pq.code ?? pq.productNo ?? pq.product_id ?? null;
+        if (!selectionKey) continue;
+        const qty = Number(pq.managerQuantity ?? pq.quantity ?? pq.qty ?? null);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const reqId = pq.requestId || pq.request_id || (ids.length === 1 ? ids[0] : null);
+        if (!reqId) continue;
+        const updateItemSql = `
+          UPDATE material_request_items
+          SET
+            status = 'approved',
+            assigned_quantity = $3
+          WHERE request_id = $1 AND (selection_key = $2 OR product_code = $2 OR product_id = $2)
+        `;
+        await executeWithRetry(() =>
+          withTimeout(client.query(updateItemSql, [reqId, selectionKey, qty]), 10000)
+        );
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      updated: result.rows || [],
+      message: 'تمت الموافقة على طلبات المواد بنجاح',
+    });
+  } catch (err) {
+    console.error('❌ Failed to approve material requests:', err);
+    return res.status(500).json({ error: err.message || 'Failed to approve material requests' });
+  } finally {
+    client.release();
+  }
+});
+
 // Mark one or more material request items as completed/ordered/delivered
 router.post('/requestMaterial/markDone', async (req, res) => {
   const { items = [], status = 'completed', driverId = null, driverName = null, driverEmail = null } = req.body || {};
