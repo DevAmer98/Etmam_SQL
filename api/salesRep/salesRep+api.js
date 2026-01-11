@@ -104,10 +104,16 @@ async function createClerkUser(email, password, name, role) {
 // Function to send a welcome email via SendGrid
 async function sendWelcomeEmail(email, name, temporaryPassword, role) {
   try {
+    const roleLabel =
+      role === 'salesRep'
+        ? 'مندوب المبيعات'
+        : role === 'salesPro'
+          ? 'مبيعات برو'
+          : role;
     const emailContent = `
     <div style="direction: rtl; text-align: right;">
       <h2>مرحبًا ${name}!</h2>
-      <p>لقد تم إنشاء حسابك كـ ${role === 'salesRep' ? 'مندوب المبيعات' : role} بنجاح.</p>
+      <p>لقد تم إنشاء حسابك كـ ${roleLabel} بنجاح.</p>
       <p>إليك بيانات تسجيل الدخول الخاصة بك:</p>
       <p>البريد الإلكتروني: ${email}</p>
       <p>كلمة المرور المؤقتة: ${temporaryPassword}</p>
@@ -160,7 +166,7 @@ router.post('/salesreps', async (req, res) => {
     }
 
     // Validate role
-    const validRoles = ['driver', 'salesRep'];
+    const validRoles = ['driver', 'salesRep', 'salesPro'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
