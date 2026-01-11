@@ -59,15 +59,28 @@ router.get('/quotations/manager/pending-count', async (req, res) => {
 router.get('/quotations/supervisor/pending-count', async (req, res) => {
   const client = await pool.connect();
   try {
+    const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
+    const whereParts = [
+      "quotations.supervisoraccept = 'pending'",
+      baseFilter,
+    ];
+    const params = [];
+    if (username) {
+      params.push(username);
+      whereParts.push(
+        `(LOWER(TRIM(quotations.username)) = LOWER(TRIM($1)) OR LOWER(TRIM(clients.username)) = LOWER(TRIM($1)))`
+      );
+    }
+    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
     const countQuery = `
       SELECT COUNT(*) AS count
       FROM quotations
       JOIN clients ON quotations.client_id = clients.id
-      WHERE quotations.supervisoraccept = 'pending'
-        AND ${baseFilter}
+      ${whereClause}
     `;
 
-    const result = await client.query(countQuery);
+    const result = await client.query(countQuery, params);
     const count = parseInt(result.rows[0].count, 10);
 
     res.status(200).json({ pendingQuotationsCount: count });

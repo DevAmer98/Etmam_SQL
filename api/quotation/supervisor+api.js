@@ -307,36 +307,45 @@ router.get('/supervisor', async (req, res) => {
       const page = Math.max(parseInt(req.query.page || '1', 10), 1);
       const query = `%${req.query.query || ''}%`;
       const status = req.query.status || 'all';
+      const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
       const offset = (page - 1) * limit;
   
       const hasStatus = status !== 'all';
-      const countParams = hasStatus ? [query, status] : [query];
-      const countCondition = hasStatus
-        ? `(quotations.status = $2 OR quotations.supervisoraccept = $2)`
-        : 'TRUE';
+      const whereParts = [];
+      const params = [];
+      let idx = 1;
+      params.push(query);
+      whereParts.push(`(clients.client_name ILIKE $${idx} OR clients.company_name ILIKE $${idx})`);
+      idx += 1;
+      if (hasStatus) {
+        params.push(status);
+        whereParts.push(`(quotations.status = $${idx} OR quotations.supervisoraccept = $${idx})`);
+        idx += 1;
+      }
+      if (username) {
+        params.push(username);
+        whereParts.push(`(LOWER(TRIM(quotations.username)) = LOWER(TRIM($${idx})) OR LOWER(TRIM(clients.username)) = LOWER(TRIM($${idx})))`);
+        idx += 1;
+      }
+      const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
   
       // COUNT query
       const countQuery = `
         SELECT COUNT(*) AS count
         FROM quotations
         JOIN clients ON quotations.client_id = clients.id
-        WHERE (clients.client_name ILIKE $1 OR clients.company_name ILIKE $1)
-        AND ${countCondition}
+        ${whereClause}
       `;
   
       const countResult = await executeWithRetry(() =>
-        client.query(countQuery, countParams)
+        client.query(countQuery, params)
       );
       const totalCount = parseInt(countResult.rows[0].count, 10);
   
       // Build pagination query
-      const baseParams = hasStatus
-        ? [limit, offset, query, status]
-        : [limit, offset, query];
-  
-      const filterCondition = hasStatus
-        ? `(quotations.status = $4 OR quotations.supervisoraccept = $4)`
-        : 'TRUE';
+      const dataParams = [...params, limit, offset];
+      const limitIndex = params.length + 1;
+      const offsetIndex = params.length + 2;
   
       const baseQuery = `
         SELECT 
@@ -354,14 +363,13 @@ router.get('/supervisor', async (req, res) => {
           clients.username AS client_added_by
         FROM quotations
         JOIN clients ON quotations.client_id = clients.id
-        WHERE (clients.client_name ILIKE $3 OR clients.company_name ILIKE $3)
-        AND ${filterCondition}
+        ${whereClause}
         ORDER BY quotations.created_at DESC
-        LIMIT $1 OFFSET $2
+        LIMIT $${limitIndex} OFFSET $${offsetIndex}
       `;
   
       const quotationsResult = await executeWithRetry(() =>
-        client.query(baseQuery, baseParams)
+        client.query(baseQuery, dataParams)
       );
   
       const orders = quotationsResult.rows;

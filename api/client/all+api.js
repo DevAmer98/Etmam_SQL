@@ -34,26 +34,40 @@ router.get('/allClients', asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit || '10', 10);
     const page = parseInt(req.query.page || '1', 10);
     const searchQuery = `%${req.query.search || ''}%`;
+    const username = typeof req.query.username === 'string' ? req.query.username.trim() : '';
     const offset = (page - 1) * limit;
+
+    const whereParts = [];
+    const params = [];
+    let idx = 1;
+    params.push(searchQuery);
+    whereParts.push(`(client_name ILIKE $${idx} OR company_name ILIKE $${idx})`);
+    idx += 1;
+    if (username) {
+      params.push(username);
+      whereParts.push(`LOWER(TRIM(username)) = LOWER(TRIM($${idx}))`);
+      idx += 1;
+    }
+    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
     const clientsQuery = `
       SELECT * FROM clients
-      WHERE client_name ILIKE $1 OR company_name ILIKE $1
+      ${whereClause}
       ORDER BY client_name
-      LIMIT $2 OFFSET $3
+      LIMIT $${idx} OFFSET $${idx + 1}
     `;
 
     const clientsResult = await executeWithRetry(() =>
-      withTimeout(client.query(clientsQuery, [searchQuery, limit, offset]), 10000)
+      withTimeout(client.query(clientsQuery, [...params, limit, offset]), 10000)
     );
 
     const countQuery = `
       SELECT COUNT(*) AS count FROM clients
-      WHERE client_name ILIKE $1 OR company_name ILIKE $1
+      ${whereClause}
     `;
 
     const countResult = await executeWithRetry(() =>
-      withTimeout(client.query(countQuery, [searchQuery]), 10000)
+      withTimeout(client.query(countQuery, params), 10000)
     );
 
     const total = parseInt(countResult.rows[0]?.count || '0', 10);
