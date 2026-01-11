@@ -1,4 +1,4 @@
-
+//api/quotation/acceptedOrders+api.js
 
 import express from 'express';
 import pkg from 'pg'; // New
@@ -45,7 +45,7 @@ router.get('/quotations/supervisorAccept', async (req, res) => {
     const status = req.query.status || 'all';
     const offset = (page - 1) * limit;
 
-    let filterCondition = "quotations.supervisoraccept = 'accepted'";
+    let filterCondition = "quotations.manageraccept = 'accepted'";
     const baseQueryParams = [limit, offset, `%${query}%`];
 
     // Apply specific acceptance filters if not 'all'
