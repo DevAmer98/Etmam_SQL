@@ -61,6 +61,20 @@ const pickSalesmanName = (customer) =>
   customer?.salesName ??
   null;
 
+// Medad in this tenant may not expose a distinct salesman ID.
+// Fall back to normalized salesman name as a stable string key.
+const buildSalesmanKey = (customer) => {
+  const idRaw = pickSalesmanId(customer);
+  const id = idRaw != null ? idRaw.toString().trim() : '';
+  if (id) return { key: id, source: 'id' };
+
+  const nameRaw = pickSalesmanName(customer);
+  const name = nameRaw != null ? nameRaw.toString().trim() : '';
+  if (name) return { key: name, source: 'name_fallback' };
+
+  return { key: '', source: 'none' };
+};
+
 const normalize = (value) =>
   (value || '')
     .toString()
@@ -101,17 +115,18 @@ router.get('/medad/salesmen', async (req, res) => {
       const batch = Array.isArray(raw) ? raw : [];
 
       for (const c of batch) {
-        const salesmanIdRaw = pickSalesmanId(c);
+        const salesmanKey = buildSalesmanKey(c);
         const salesmanNameRaw = pickSalesmanName(c);
-        const salesmanId = salesmanIdRaw != null ? salesmanIdRaw.toString().trim() : '';
+        const salesmanId = salesmanKey.key;
         const salesmanName = salesmanNameRaw != null ? salesmanNameRaw.toString().trim() : '';
 
-        // Medad IDs are strings; ignore rows with no usable ID.
+        // Keep rows with either true ID or fallback name key.
         if (!salesmanId) continue;
 
         const existing = byId.get(salesmanId) || {
           medad_salesman_id: salesmanId,
           salesman_name: salesmanName || null,
+          id_source: salesmanKey.source,
           customers_count: 0,
         };
         existing.customers_count += 1;
@@ -232,7 +247,7 @@ router.post('/medad/salesmen/auto-match', async (req, res) => {
       const batch = Array.isArray(raw) ? raw : [];
 
       for (const c of batch) {
-        const sid = pickSalesmanId(c);
+        const sid = buildSalesmanKey(c).key;
         const sname = pickSalesmanName(c);
         const idStr = sid != null ? sid.toString().trim() : '';
         const nameNorm = normalize(sname);
