@@ -67,6 +67,8 @@ import { Pool } from 'pg';
 import medadCustomersApi from './api/medad/customers+api.js';
 import medadClientsApi from './api/client/medad/clients+api.js';
 import medadWarehouseInventoryApi from './api/medad/warehouseInventory+api.js';
+import medadInvoiceApi from './api/medad/invoice+api.js';
+import medadSalesmenApi from './api/medad/salesmen+api.js';
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -162,6 +164,8 @@ app.use('/api/material', requestMaterialApi);
 app.use('/api', medadCustomersApi);
 app.use('/api', medadClientsApi);
 app.use('/api', medadWarehouseInventoryApi);
+app.use('/api', medadInvoiceApi);
+app.use('/api', medadSalesmenApi);
 
 
 

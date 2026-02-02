@@ -121,14 +121,16 @@ router.post('/orders', async (req, res) => {
    
   try {
     // Validate request body first
-    const { 
-      client_id, 
-      username, 
-      delivery_date, 
-      delivery_type, 
-      products, 
-      notes, 
-      manager_notes,
+      const { 
+        client_id, 
+        username, 
+        warehouse_no,
+        medad_salesman_id,
+        delivery_date, 
+        delivery_type, 
+        products, 
+        notes, 
+        manager_notes,
       deliveryLocations = [],
       total_vat, 
       total_subtotal,
@@ -200,14 +202,26 @@ router.post('/orders', async (req, res) => {
         const orderResult = await withTimeout( 
           client.query(
             `INSERT INTO orders 
-              (client_id, username, delivery_date, delivery_type, notes, manager_notes, total_vat, total_subtotal, status, custom_id, order_number, manageraccept, manageraccept_at )
+              (client_id, username, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, manager_notes, total_vat, total_subtotal, status, custom_id, order_number, manageraccept, manageraccept_at )
              VALUES 
-              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
              RETURNING id`,
             [
-              client_id, username, formattedDate, delivery_type, notes || null, manager_notes || null,
-              total_vat, total_subtotal, status, customId, newOrderNumber,
-              manageraccept, manageraccept_at
+              client_id,
+              username,
+              warehouse_no || null,
+              medad_salesman_id || null,
+              formattedDate,
+              delivery_type,
+              notes || null,
+              manager_notes || null,
+              total_vat,
+              total_subtotal,
+              status,
+              customId,
+              newOrderNumber,
+              manageraccept,
+              manageraccept_at
             ]
           ),
           10000
@@ -223,13 +237,30 @@ router.post('/orders', async (req, res) => {
         // Insert products
         for (const product of products) {
           totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+          const productId = product.product_id ?? product.productId ?? null;
+          let medadProductNo =
+            product.medad_product_no ??
+            product.product_code ??
+            product.productNo ??
+            product.code ??
+            null;
+
+          if (!medadProductNo && productId) {
+            const productCodeResult = await withTimeout(
+              client.query('SELECT code FROM products WHERE id = $1', [productId]),
+              5000
+            );
+            medadProductNo = productCodeResult.rows[0]?.code ?? null;
+          }
+
           await withTimeout(
             client.query(
-              `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
+              `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal, product_id, medad_product_no)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
               [
                 orderId, product.description, product.quantity,
-                parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal)
+                parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal),
+                productId, medadProductNo
               ]
             ),
             5000

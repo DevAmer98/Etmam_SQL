@@ -155,7 +155,7 @@ async function sendWelcomeEmail(email, name, temporaryPassword, role) {
 router.post('/salesreps', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, email, phone, clerkId, role = 'salesRep' } = req.body;
+    const { name, email, phone, clerkId, role = 'salesRep', isSalesPro = false, medad_salesman_id = null } = req.body;
 
     // Validate required fields
     if (!name || !email || !phone) {
@@ -166,8 +166,10 @@ router.post('/salesreps', async (req, res) => {
     }
 
     // Validate role
-    const validRoles = ['driver', 'salesRep', 'salesPro'];
-    if (!validRoles.includes(role)) {
+    const validRoles = ['driver', 'salesRep'];
+    const normalizedRole = role === 'salesPro' ? 'salesRep' : role;
+    const isSalesProFlag = role === 'salesPro' ? true : Boolean(isSalesPro);
+    if (!validRoles.includes(normalizedRole)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid role specified',
@@ -202,7 +204,7 @@ router.post('/salesreps', async (req, res) => {
     // If no clerkId provided, create a new Clerk user
     if (!clerkId) {
       const temporaryPassword = generateStrongPassword();
-      const clerkUser = await createClerkUser(email, temporaryPassword, name, role);
+      const clerkUser = await createClerkUser(email, temporaryPassword, name, normalizedRole);
       userId = clerkUser.id;
 
       // Send welcome email with credentials
@@ -211,13 +213,16 @@ router.post('/salesreps', async (req, res) => {
 
     // Insert salesRep into database with role
     const insertQuery = `
-      INSERT INTO salesreps (name, email, phone, clerk_id, role, created_at)
-      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-      RETURNING id, name, email, phone, role
+      INSERT INTO salesreps (name, email, phone, clerk_id, role, is_sales_pro, created_at, medad_salesman_id)
+      VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)
+      RETURNING id, name, email, phone, role, is_sales_pro, medad_salesman_id
     `;
 
     const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(insertQuery, [name, email, phone, userId, role]), 10000); // 10-second timeout
+      return await withTimeout(
+        client.query(insertQuery, [name, email, phone, userId, normalizedRole, isSalesProFlag, medad_salesman_id]),
+        10000,
+      ); // 10-second timeout
     });
     console.log('SalesRep inserted into database');
 

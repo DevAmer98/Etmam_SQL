@@ -128,7 +128,7 @@ router.put(
   '/managers/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { name, email, phone, role } = req.body;
+    const { name, email, phone, role, medad_salesman_id = null } = req.body;
 
     if (!id) return res.status(400).json({ success: false, message: 'Manager ID is required' });
     if (!name || !email || !phone || !role) {
@@ -174,13 +174,13 @@ router.put(
 
       const updateQuery = `
         UPDATE managers
-        SET name = $1, email = $2, phone = $3, role = $4
-        WHERE id = $5
-        RETURNING id, name, email, phone, role
+        SET name = $1, email = $2, phone = $3, role = $4, medad_salesman_id = $5
+        WHERE id = $6
+        RETURNING id, name, email, phone, role, medad_salesman_id
       `;
 
       const result = await executeWithRetry(() =>
-        withTimeout(client.query(updateQuery, [name, email, phone, role, id]), 10000)
+        withTimeout(client.query(updateQuery, [name, email, phone, role, medad_salesman_id, id]), 10000)
       );
 
       if (result.rows.length === 0) {

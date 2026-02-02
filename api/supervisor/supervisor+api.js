@@ -150,7 +150,7 @@ async function sendWelcomeEmail(email, name, temporaryPassword, role) {
 router.post('/supervisors', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, email, phone, clerkId, role = 'supervisor', fcmToken = null } = req.body;
+    const { name, email, phone, clerkId, role = 'supervisor', fcmToken = null, medad_salesman_id = null } = req.body;
 
     // Validate required fields
     if (!name || !email || !phone) {
@@ -205,13 +205,13 @@ router.post('/supervisors', async (req, res) => {
 
     // Insert supervisor into database
     const insertQuery = `
-      INSERT INTO supervisors (name, email, phone, clerk_id, role, created_at, fcm_token)
-      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
-      RETURNING id, name, email, phone, role
+      INSERT INTO supervisors (name, email, phone, clerk_id, role, created_at, fcm_token, medad_salesman_id)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, $7)
+      RETURNING id, name, email, phone, role, medad_salesman_id
     `;
 
     const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(insertQuery, [name, email, phone, userId, role, fcmToken]), 10000); // 10-second timeout
+      return await withTimeout(client.query(insertQuery, [name, email, phone, userId, role, fcmToken, medad_salesman_id]), 10000); // 10-second timeout
     });
 
     res.status(200).json({

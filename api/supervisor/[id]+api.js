@@ -149,7 +149,7 @@ router.put('/supervisors/:id', async (req, res) => {
   const client = await connectToDatabase();
   try {
     const { id } = req.params;
-    const { name, email, phone, role } = req.body;
+    const { name, email, phone, role, medad_salesman_id = null } = req.body;
 
     if (!id) {
       return res.status(400).json({ success: false, message: 'Supervisor ID is required' });
@@ -200,12 +200,12 @@ router.put('/supervisors/:id', async (req, res) => {
     // Update supervisor in the database
     const updateQuery = `
       UPDATE supervisors
-      SET name = $1, email = $2, phone = $3, role = $4
-      WHERE id = $5
-      RETURNING id, name, email, phone, role
+      SET name = $1, email = $2, phone = $3, role = $4, medad_salesman_id = $5
+      WHERE id = $6
+      RETURNING id, name, email, phone, role, medad_salesman_id
     `;
     const result = await executeWithRetry(async () => {
-      return await withTimeout(client.query(updateQuery, [name, email, phone, role, id]), 10000); // 10-second timeout
+      return await withTimeout(client.query(updateQuery, [name, email, phone, role, medad_salesman_id, id]), 10000); // 10-second timeout
     });
 
     if (result.rows.length === 0) {

@@ -176,6 +176,13 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
     const salesmanId = salesmanIncoming;
     const salesmanName = salesmanIncoming;
     const isDefault = Boolean(req.body.isDefault ?? req.body.is_default ?? false);
+    const address1 = req.body.address1 ?? req.body.address_1 ?? null;
+    const address2 = req.body.address2 ?? req.body.address_2 ?? null;
+    const city = req.body.city ?? null;
+    const region = req.body.region ?? req.body.citySubdivisionName ?? null;
+    const phone = req.body.phone ?? req.body.contact1Phone ?? null;
+    const vatType = req.body.vatType ?? req.body.vat_type ?? null;
+    const warehouseNo = req.body.warehouseNo ?? req.body.warehouse_no ?? null;
 
     if (!clientId || !medadCustomerId || !vatNo) {
       return res.status(400).json({ error: 'clientId, medadCustomerId, and vatNo are required' });
@@ -197,8 +204,23 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
     }
 
     const insertQuery = `
-      INSERT INTO client_medad_customers (client_id, medad_customer_id, vat_no, branch_name, salesman_id, salesman_name, is_default)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO client_medad_customers (
+        client_id,
+        medad_customer_id,
+        vat_no,
+        branch_name,
+        salesman_id,
+        salesman_name,
+        is_default,
+        address1,
+        address2,
+        city,
+        region,
+        phone,
+        vat_type,
+        warehouse_no
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
 
@@ -212,6 +234,13 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
           salesmanId,
           salesmanName,
           isDefault,
+          address1,
+          address2,
+          city,
+          region,
+          phone,
+          vatType,
+          warehouseNo,
         ]),
         10000
       )

@@ -91,6 +91,14 @@ router.get('/medad/clients', async (_req, res) => {
             vat_no: c.vatNo || c.vat_no || '',
             phone: c.phone || c.contact1Phone || '',
             branch: c.branch || '',
+            salesman_id:
+              c.salesmanId?.toString?.() ||
+              c.salesman_id?.toString?.() ||
+              c.salesmanNo?.toString?.() ||
+              c.salesman_no?.toString?.() ||
+              c.salesId?.toString?.() ||
+              c.sales_id?.toString?.() ||
+              '',
             salesman_name: c.salesman || c.salesmanName || '',
           };
         })

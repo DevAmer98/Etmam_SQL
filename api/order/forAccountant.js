@@ -86,9 +86,22 @@ router.get('/orders/forAccountant', async (req, res) => {
         orders.supervisorAccept,
         orders.actual_delivery_date,
         orders.order_number,
-        orders.total_price 
+        orders.total_price,
+        cmc.id AS linked_medad_link_id,
+        cmc.medad_customer_id AS linked_medad_customer_id,
+        CASE
+          WHEN orders.client_medad_customer_id IS NOT NULL OR cmc.id IS NOT NULL THEN TRUE
+          ELSE FALSE
+        END AS client_synced
       FROM orders
       JOIN clients ON orders.client_id = clients.id
+      LEFT JOIN LATERAL (
+        SELECT id, medad_customer_id
+        FROM client_medad_customers
+        WHERE CAST(client_id AS TEXT) = CAST(orders.client_id AS TEXT)
+        ORDER BY id DESC
+        LIMIT 1
+      ) cmc ON TRUE
       ${whereSQL}
       ORDER BY orders.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

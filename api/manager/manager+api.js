@@ -114,7 +114,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const client = await pool.connect();
     try {
-      const { name, email, phone, clerkId, role = 'manager', fcmToken = null } = req.body;
+      const { name, email, phone, clerkId, role = 'manager', fcmToken = null, medad_salesman_id = null } = req.body;
 
       if (!name || !email || !phone)
         return res.status(400).json({ success: false, message: 'Missing required fields' });
@@ -144,13 +144,13 @@ router.post(
       }
 
       const insert = `
-        INSERT INTO managers (name, email, phone, clerk_id, role, created_at, fcm_token)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
-        RETURNING id, name, email, phone, role
+        INSERT INTO managers (name, email, phone, clerk_id, role, created_at, fcm_token, medad_salesman_id)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, $7)
+        RETURNING id, name, email, phone, role, medad_salesman_id
       `;
 
       const result = await executeWithRetry(() =>
-        withTimeout(client.query(insert, [name, email, phone, userId, role, fcmToken]), 10000)
+        withTimeout(client.query(insert, [name, email, phone, userId, role, fcmToken, medad_salesman_id]), 10000)
       );
 
       res.status(201).json({

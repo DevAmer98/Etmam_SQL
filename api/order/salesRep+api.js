@@ -151,7 +151,20 @@ router.post('/orders/salesRep', async (req, res) => {
   let transactionStarted = false;
    
   try {
-    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal, status = 'not Delivered' } = req.body;
+    const {
+      client_id,
+      username,
+      warehouse_no,
+      medad_salesman_id,
+      delivery_date,
+      delivery_type,
+      products,
+      notes,
+      deliveryLocations = [],
+      total_vat,
+      total_subtotal,
+      status = 'not Delivered',
+    } = req.body;
  
     // Validate required fields first
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -169,9 +182,21 @@ router.post('/orders/salesRep', async (req, res) => {
 
     const orderResult = await withTimeout(
       client.query(
-        `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [client_id, username, formattedDate, delivery_type, notes || null, status,total_vat, total_subtotal, customId]
+        `INSERT INTO orders (client_id, username, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+        [
+          client_id,
+          username,
+          warehouse_no || null,
+          medad_salesman_id || null,
+          formattedDate,
+          delivery_type,
+          notes || null,
+          status,
+          total_vat,
+          total_subtotal,
+          customId,
+        ]
         
       ),
       10000 // 10-second timeout
@@ -252,6 +277,8 @@ router.post('/orders/salesRep', async (req, res) => {
     const { 
       client_id, 
       username, 
+      warehouse_no,
+      medad_salesman_id,
       delivery_date, 
       delivery_type, 
       products, 
@@ -295,9 +322,21 @@ router.post('/orders/salesRep', async (req, res) => {
 
     const orderResult = await withTimeout(
       client.query(
-        `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [client_id, username, formattedDate, delivery_type, notes || null, status, total_vat, total_subtotal, customId]
+        `INSERT INTO orders (client_id, username, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, status, total_vat, total_subtotal, custom_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+        [
+          client_id,
+          username,
+          warehouse_no || null,
+          medad_salesman_id || null,
+          formattedDate,
+          delivery_type,
+          notes || null,
+          status,
+          total_vat,
+          total_subtotal,
+          customId
+        ]
       ),
       10000 // 10-second timeout
     );

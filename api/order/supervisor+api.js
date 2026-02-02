@@ -116,7 +116,21 @@ router.post('/orders/supervisor', async (req, res) => {
   
   try {
     // Validate request body first
-    const { client_id, username, delivery_date, delivery_type, products, notes, deliveryLocations = [],total_vat, total_subtotal,status = 'not Delivered', supervisoraccept='accepted' } = req.body;
+    const {
+      client_id,
+      username,
+      warehouse_no,
+      medad_salesman_id,
+      delivery_date,
+      delivery_type,
+      products,
+      notes,
+      deliveryLocations = [],
+      total_vat,
+      total_subtotal,
+      status = 'not Delivered',
+      supervisoraccept = 'accepted'
+    } = req.body;
 
     // Input validation
     if (!client_id || !delivery_date || !delivery_type || !products || products.length === 0) {
@@ -165,9 +179,24 @@ const supervisoraccept_at =
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id,order_number,supervisoraccept,supervisoraccept_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7,$8, $9,$10,$11,$12) RETURNING id`,
-            [client_id, username, formattedDate, delivery_type, notes || null,total_vat, total_subtotal, status, customId,newOrderNumber,supervisoraccept, supervisoraccept_at]
+            `INSERT INTO orders (client_id, username, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id, order_number, supervisoraccept, supervisoraccept_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+            [
+              client_id,
+              username,
+              warehouse_no || null,
+              medad_salesman_id || null,
+              formattedDate,
+              delivery_type,
+              notes || null,
+              total_vat,
+              total_subtotal,
+              status,
+              customId,
+              newOrderNumber,
+              supervisoraccept,
+              supervisoraccept_at
+            ]
           ),
           10000
         );
