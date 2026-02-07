@@ -2,6 +2,7 @@ import express from 'express';
 import moment from 'moment-timezone';
 import admin from '../../firebase-init.js';
 import pkg from 'pg';
+import { resolveUserDefaults } from '../../utils/resolveUserDefaults.js';
 const { Pool } = pkg;
 
 const router = express.Router();
@@ -140,6 +141,8 @@ router.post('/orders/supervisor', async (req, res) => {
       username,
       warehouse_no,
       medad_salesman_id,
+      clerkId,
+      clerk_id,
       delivery_date,
       delivery_type,
       products,
@@ -171,6 +174,15 @@ router.post('/orders/supervisor', async (req, res) => {
       
       try {
         await client.query('BEGIN');
+
+        const resolvedDefaults = await resolveUserDefaults({
+          client,
+          role: 'supervisor',
+          clerkId: clerkId || clerk_id || null,
+          username
+        });
+        const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+        const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
         
         // Format date
         let formattedDate;
@@ -203,8 +215,8 @@ const supervisoraccept_at =
             [
               client_id,
               username,
-              warehouse_no || null,
-              medad_salesman_id || null,
+              resolvedWarehouseNo,
+              resolvedMedadSalesmanId,
               formattedDate,
               delivery_type,
               notes || null,
@@ -330,6 +342,10 @@ router.post('/orders/supervisor', async (req, res) => {
     const { 
       client_id, 
       username, 
+      warehouse_no,
+      medad_salesman_id,
+      clerkId,
+      clerk_id,
       delivery_date, 
       delivery_type, 
       products, 
@@ -377,6 +393,15 @@ router.post('/orders/supervisor', async (req, res) => {
       
       try {
         await client.query('BEGIN');
+
+        const resolvedDefaults = await resolveUserDefaults({
+          client,
+          role: 'supervisor',
+          clerkId: clerkId || clerk_id || null,
+          username
+        });
+        const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+        const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
         
         // Format date
         let formattedDate;
@@ -403,10 +428,10 @@ router.post('/orders/supervisor', async (req, res) => {
         // Insert order
         const orderResult = await withTimeout(
           client.query(
-            `INSERT INTO orders (client_id, username, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id, order_number, supervisoraccept, supervisoraccept_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+            `INSERT INTO orders (client_id, username, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, total_vat, total_subtotal, status, custom_id, order_number, supervisoraccept, supervisoraccept_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
             [
-              client_id, username, formattedDate, delivery_type, notes || null,
+              client_id, username, resolvedWarehouseNo, resolvedMedadSalesmanId, formattedDate, delivery_type, notes || null,
               total_vat, total_subtotal, status, customId, newOrderNumber,
               supervisoraccept, supervisoraccept_at
             ]

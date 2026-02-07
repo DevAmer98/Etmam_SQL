@@ -2,6 +2,7 @@ import express from 'express';
 import moment from 'moment-timezone';
 import admin from '../../firebase-init.js';
 import pkg from 'pg';
+import { resolveUserDefaults } from '../../utils/resolveUserDefaults.js';
 const { Pool } = pkg;
 
 const router = express.Router();
@@ -112,6 +113,10 @@ router.post('/quotations', async (req, res) => {
        client_id, 
       username, 
       manager_id, 
+      warehouse_no,
+      medad_salesman_id,
+      clerkId,
+      clerk_id,
       delivery_date, 
       delivery_type, 
       products,  
@@ -130,6 +135,15 @@ router.post('/quotations', async (req, res) => {
         await client.query('ROLLBACK'); // Rollback if validation fails
         return res.status(400).json({ error: 'Missing required fields' });
       }
+
+      const resolvedDefaults = await resolveUserDefaults({
+        client,
+        role: 'manager',
+        clerkId: clerkId || clerk_id || null,
+        username
+      });
+      const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+      const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
 
 
       
@@ -152,9 +166,9 @@ const manageraccept_at =
 
       // Insert quotation
     const insertQuery = `
-        INSERT INTO quotations (client_id, username, manager_id, delivery_date, delivery_type, notes, manager_notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,manageraccept,manageraccept_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13,$14,$15,$16) RETURNING id`;
-        const insertParams = [client_id, username, manager_id || null, formattedDate, delivery_type, notes || null, manager_notes || null, status, 0, 0, 0, customId, condition,newQuotationNumber,manageraccept,manageraccept_at];
+        INSERT INTO quotations (client_id, username, manager_id, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, manager_notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,manageraccept,manageraccept_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`;
+        const insertParams = [client_id, username, manager_id || null, resolvedWarehouseNo, resolvedMedadSalesmanId, formattedDate, delivery_type, notes || null, manager_notes || null, status, 0, 0, 0, customId, condition, newQuotationNumber, manageraccept, manageraccept_at];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 

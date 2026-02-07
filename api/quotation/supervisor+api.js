@@ -2,6 +2,7 @@ import express from 'express';
 import moment from 'moment-timezone';
 import admin from '../../firebase-init.js';
 import pkg from 'pg';
+import { resolveUserDefaults } from '../../utils/resolveUserDefaults.js';
 const { Pool } = pkg;
 
 
@@ -110,7 +111,11 @@ router.post('/quotations/supervisor', async (req, res) => {
       notes, 
       condition = 'نقدي - كاش', 
       status = 'not Delivered',
-      supervisoraccept='accepted' 
+      supervisoraccept='accepted',
+      warehouse_no,
+      medad_salesman_id,
+      clerkId,
+      clerk_id
     } = req.body;
 
     // Validate required fields
@@ -130,12 +135,21 @@ const supervisoraccept_at =
     const formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
     const customId = await generateCustomId(client); // Generate custom_id without RevX
 
+    const resolvedDefaults = await resolveUserDefaults({
+      client,
+      role: 'supervisor',
+      clerkId: clerkId || clerk_id || null,
+      username
+    });
+    const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+    const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
+
     // Insert main quotation
     const insertQuery = `
-      INSERT INTO quotations (client_id, username, supervisor_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition,supervisoraccept,supervisoraccept_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13 ,$14) RETURNING id
+      INSERT INTO quotations (client_id, username, supervisor_id, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, status, total_price, total_vat, total_subtotal, custom_id, condition, supervisoraccept, supervisoraccept_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id
     `;
-    const insertParams = [client_id, username, supervisor_id, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition,supervisoraccept, supervisoraccept_at];
+    const insertParams = [client_id, username, supervisor_id, resolvedWarehouseNo, resolvedMedadSalesmanId, formattedDate, delivery_type, notes || null, status, 0, 0, 0, customId, condition, supervisoraccept, supervisoraccept_at];
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 

@@ -2,6 +2,7 @@ import express from 'express';
 import moment from 'moment-timezone'; // Ensure moment-timezone is installed
 import admin from '../../firebase-init.js';
 import pkg from 'pg'; // New
+import { resolveUserDefaults } from '../../utils/resolveUserDefaults.js';
 const { Pool } = pkg; // Destructure Pool
 
 const router = express.Router();
@@ -170,15 +171,17 @@ router.post('/orders/salesRep', async (req, res) => {
   let transactionStarted = false;
    
   try {
-    const {
-      client_id,
-      username,
+    const { 
+      client_id, 
+      username, 
       warehouse_no,
       medad_salesman_id,
-      delivery_date,
-      delivery_type,
-      products,
-      notes,
+      clerkId,
+      clerk_id,
+      delivery_date, 
+      delivery_type, 
+      products, 
+      notes, 
       deliveryLocations = [],
       total_vat,
       total_subtotal,
@@ -339,6 +342,15 @@ router.post('/orders/salesRep', async (req, res) => {
     // Format date (light validation)
     let formattedDate = moment(delivery_date).tz('UTC').format('YYYY-MM-DD HH:mm:ss');
 
+    const resolvedDefaults = await resolveUserDefaults({
+      client,
+      role: 'salesRep',
+      clerkId: clerkId || clerk_id || null,
+      username
+    });
+    const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+    const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
+
     // Start transaction
     await client.query('BEGIN');
     transactionStarted = true;
@@ -353,8 +365,8 @@ router.post('/orders/salesRep', async (req, res) => {
         [
           client_id,
           username,
-          warehouse_no || null,
-          medad_salesman_id || null,
+          resolvedWarehouseNo,
+          resolvedMedadSalesmanId,
           formattedDate,
           delivery_type,
           notes || null,

@@ -2,6 +2,7 @@ import express from 'express';
 import moment from 'moment-timezone';
 import admin from '../../firebase-init.js';
 import pkg from 'pg';
+import { resolveUserDefaults } from '../../utils/resolveUserDefaults.js';
 const { Pool } = pkg;
 
 const router = express.Router();
@@ -145,6 +146,8 @@ router.post('/orders', async (req, res) => {
         username, 
         warehouse_no,
         medad_salesman_id,
+        clerkId,
+        clerk_id,
         delivery_date, 
         delivery_type, 
         products, 
@@ -189,6 +192,15 @@ router.post('/orders', async (req, res) => {
       });
     }
 
+    const resolvedDefaults = await resolveUserDefaults({
+      client: pool,
+      role: 'manager',
+      clerkId: clerkId || clerk_id || null,
+      username
+    });
+    const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
+    const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
+
     await executeWithRetry(async () => {
       client = await pool.connect();
       
@@ -228,8 +240,8 @@ router.post('/orders', async (req, res) => {
             [
               client_id,
               username,
-              warehouse_no || null,
-              medad_salesman_id || null,
+              resolvedWarehouseNo,
+              resolvedMedadSalesmanId,
               formattedDate,
               delivery_type,
               notes || null,
