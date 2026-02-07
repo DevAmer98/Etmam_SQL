@@ -53,6 +53,7 @@ import quotationSupervisorApi from './api/quotation/supervisor+api.js'
 import ordersupervisorApi from './api/order/supervisor+api.js'; 
 import allClientsApi from './api/client/all+api.js'; 
 import orderPerClientApi from './api/client/[id]/order+api.js'
+import quotationPerClientApi from './api/client/[id]/quotation+api.js'
 import salesRepClientsApi from './api/client/getClientsForsalesRep+api.js'
 import pendingOrdersCountApi from './api/order/pending.js';
 import pendingQuotationsCountApi from './api/quotation/pending.js';
@@ -153,6 +154,7 @@ app.use('/api', singleStorekeeperApi);
 app.use('/api', singleSupervisorApi);
 app.use('/api', allClientsApi);
 app.use('/api', orderPerClientApi);
+app.use('/api', quotationPerClientApi);
 app.use('/api', salesRepClientsApi);
 app.use('/api', pendingOrdersCountApi);
 app.use('/api', pendingQuotationsCountApi);
