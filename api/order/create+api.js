@@ -35,6 +35,25 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+const resolveProductDescription = (product) => {
+  const raw =
+    product?.description ??
+    product?.product_name ??
+    product?.productName ??
+    product?.name ??
+    product?.item_name ??
+    product?.itemName ??
+    product?.item_description ??
+    product?.itemDescription ??
+    product?.product?.description ??
+    product?.product?.name ??
+    product?.item?.description ??
+    product?.item?.name ??
+    null;
+  if (typeof raw === 'string') return raw.trim();
+  return raw ?? null;
+};
+
 // Function to generate custom ID
 const generateCustomId = async (client) => {
   const year = new Date().getFullYear();
@@ -238,6 +257,7 @@ router.post('/orders', async (req, res) => {
         for (const product of products) {
           totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
           const productId = product.product_id ?? product.productId ?? null;
+          let description = resolveProductDescription(product);
           let medadProductNo =
             product.medad_product_no ??
             product.product_code ??
@@ -245,12 +265,21 @@ router.post('/orders', async (req, res) => {
             product.code ??
             null;
 
-          if (!medadProductNo && productId) {
+          if (productId && (!medadProductNo || !description)) {
             const productCodeResult = await withTimeout(
-              client.query('SELECT code FROM products WHERE id = $1', [productId]),
+              client.query('SELECT code, name FROM products WHERE id = $1', [productId]),
               5000
             );
-            medadProductNo = productCodeResult.rows[0]?.code ?? null;
+            if (!medadProductNo) {
+              medadProductNo = productCodeResult.rows[0]?.code ?? null;
+            }
+            if (!description) {
+              description = productCodeResult.rows[0]?.name ?? null;
+            }
+          }
+
+          if (!description) {
+            throw new Error('Missing product description');
           }
 
           await withTimeout(
@@ -258,7 +287,7 @@ router.post('/orders', async (req, res) => {
               `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal, product_id, medad_product_no)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
               [
-                orderId, product.description, product.quantity,
+                orderId, description, product.quantity,
                 parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal),
                 productId, medadProductNo
               ]
@@ -317,7 +346,10 @@ router.post('/orders', async (req, res) => {
     let errorMessage = 'Error creating order';
     let statusCode = 500;
     
-    if (error.message.includes('Invalid delivery date')) {
+    if (error.message.includes('Missing product description')) {
+      errorMessage = 'Missing product description';
+      statusCode = 400;
+    } else if (error.message.includes('Invalid delivery date')) {
       errorMessage = 'Invalid delivery date format';
       statusCode = 400;
     } else if (error.message.includes('Failed to generate order ID')) {

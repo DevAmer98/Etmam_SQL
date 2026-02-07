@@ -37,6 +37,25 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
+const resolveProductDescription = (product) => {
+  const raw =
+    product?.description ??
+    product?.product_name ??
+    product?.productName ??
+    product?.name ??
+    product?.item_name ??
+    product?.itemName ??
+    product?.item_description ??
+    product?.itemDescription ??
+    product?.product?.description ??
+    product?.product?.name ??
+    product?.item?.description ??
+    product?.item?.name ??
+    null;
+  if (typeof raw === 'string') return raw.trim();
+  return raw ?? null;
+};
+
 // Function to generate custom ID
 // Alternative function using SQL regex - FIXED VERSION
 const generateCustomId = async (client) => {
@@ -209,10 +228,14 @@ router.post('/orders/salesRep', async (req, res) => {
     let totalPrice = 0;
     for (const product of products) {
       totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+      const description = resolveProductDescription(product);
+      if (!description) {
+        throw new Error('Missing product description');
+      }
       await client.query(
         `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orderId, product.description, product.quantity,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
+        [orderId, description, product.quantity, parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal)]
       );
     }
 
@@ -260,6 +283,9 @@ router.post('/orders/salesRep', async (req, res) => {
       }
     }
     
+    if (error.message && error.message.includes('Missing product description')) {
+      return res.status(400).json({ error: 'Missing product description' });
+    }
     return res.status(500).json({ error: error.message || 'Error creating order' });
   } finally {
     client.release();
@@ -348,12 +374,16 @@ router.post('/orders/salesRep', async (req, res) => {
     let totalPrice = 0;
     for (const product of products) {
       totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+      const description = resolveProductDescription(product);
+      if (!description) {
+        throw new Error('Missing product description');
+      }
       await client.query(
         `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           orderId,
-          product.description,
+          description,
           product.quantity,
           parseFloat(product.price),
           parseFloat(product.vat),

@@ -38,6 +38,25 @@ const withTimeout = (promise, timeout) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
+const resolveProductDescription = (product) => {
+  const raw =
+    product?.description ??
+    product?.product_name ??
+    product?.productName ??
+    product?.name ??
+    product?.item_name ??
+    product?.itemName ??
+    product?.item_description ??
+    product?.itemDescription ??
+    product?.product?.description ??
+    product?.product?.name ??
+    product?.item?.description ??
+    product?.item?.name ??
+    null;
+  if (typeof raw === 'string') return raw.trim();
+  return raw ?? null;
+};
+
 // Function to generate custom ID
 const generateCustomId = async (client) => {
   try {
@@ -211,11 +230,12 @@ const supervisoraccept_at =
         // Insert products
         for (const product of products) {
           totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+          const description = resolveProductDescription(product);
           await withTimeout(
             client.query(
               `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orderId, product.description, product.quantity,parseFloat(product.price),parseFloat(product.vat),parseFloat(product.subtotal)]
+        [orderId, description, product.quantity, parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal)]
       ),
             5000
           );
@@ -269,7 +289,10 @@ const supervisoraccept_at =
     let errorMessage = 'Error creating order';
     let statusCode = 500;
     
-    if (error.message.includes('Invalid delivery date')) {
+    if (error.message.includes('Missing product description')) {
+      errorMessage = 'Missing product description';
+      statusCode = 400;
+    } else if (error.message.includes('Invalid delivery date')) {
       errorMessage = 'Invalid delivery date format';
       statusCode = 400;
     } else if (error.message.includes('Failed to generate order ID')) {
@@ -401,12 +424,16 @@ router.post('/orders/supervisor', async (req, res) => {
         // Insert products
         for (const product of products) {
           totalPrice += parseFloat(product.price) * parseFloat(product.quantity || 1);
+          const description = resolveProductDescription(product);
+          if (!description) {
+            throw new Error('Missing product description');
+          }
           await withTimeout(
             client.query(
               `INSERT INTO order_products (order_id, description, quantity, price, vat, subtotal)
                VALUES ($1, $2, $3, $4, $5, $6)`,
               [
-                orderId, product.description, product.quantity,
+                orderId, description, product.quantity,
                 parseFloat(product.price), parseFloat(product.vat), parseFloat(product.subtotal)
               ]
             ),
@@ -462,7 +489,10 @@ router.post('/orders/supervisor', async (req, res) => {
     let errorMessage = 'Error creating order';
     let statusCode = 500;
     
-    if (error.message.includes('Invalid delivery date')) {
+    if (error.message.includes('Missing product description')) {
+      errorMessage = 'Missing product description';
+      statusCode = 400;
+    } else if (error.message.includes('Invalid delivery date')) {
       errorMessage = 'Invalid delivery date format';
       statusCode = 400;
     } else if (error.message.includes('Failed to generate order ID')) {
