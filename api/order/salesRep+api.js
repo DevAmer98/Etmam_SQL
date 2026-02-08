@@ -303,19 +303,21 @@ router.post('/orders/salesRep', async (req, res) => {
   let transactionStarted = false;
 
   try {
-    const { 
-      client_id, 
-      username, 
+    const {
+      client_id,
+      username,
       warehouse_no,
       medad_salesman_id,
-      delivery_date, 
-      delivery_type, 
-      products, 
-      notes, 
+      clerkId,
+      clerk_id,
+      delivery_date,
+      delivery_type,
+      products,
+      notes,
       deliveryLocations = [],
-      total_vat, 
-      total_subtotal, 
-      status = 'not Delivered' 
+      total_vat,
+      total_subtotal,
+      status = 'not Delivered'
     } = req.body;
 
     // Validate required fields first
