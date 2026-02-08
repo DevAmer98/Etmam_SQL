@@ -43,6 +43,16 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 }; 
 
+const hasQuotationWarehouseNoColumn = async (client) => {
+  const result = await client.query(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_name = 'quotations' AND column_name = 'warehouse_no'
+     LIMIT 1`
+  );
+  return result.rowCount > 0;
+};
+
 
 const generateCustomId = async (client) => {
   const year = new Date().getFullYear();
@@ -164,11 +174,51 @@ const manageraccept_at =
     : null;
 
 
-      // Insert quotation
-    const insertQuery = `
-        INSERT INTO quotations (client_id, username, manager_id, warehouse_no, medad_salesman_id, delivery_date, delivery_type, notes, manager_notes, status, total_price, total_vat, total_subtotal, custom_id, condition,quotation_number,manageraccept,manageraccept_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`;
-        const insertParams = [client_id, username, manager_id || null, resolvedWarehouseNo, resolvedMedadSalesmanId, formattedDate, delivery_type, notes || null, manager_notes || null, status, 0, 0, 0, customId, condition, newQuotationNumber, manageraccept, manageraccept_at];
+      const hasWarehouseNoColumn = await hasQuotationWarehouseNoColumn(client);
+      const insertColumns = [
+        'client_id',
+        'username',
+        'manager_id',
+        ...(hasWarehouseNoColumn ? ['warehouse_no'] : []),
+        'medad_salesman_id',
+        'delivery_date',
+        'delivery_type',
+        'notes',
+        'manager_notes',
+        'status',
+        'total_price',
+        'total_vat',
+        'total_subtotal',
+        'custom_id',
+        'condition',
+        'quotation_number',
+        'manageraccept',
+        'manageraccept_at',
+      ];
+      const insertParams = [
+        client_id,
+        username,
+        manager_id || null,
+        ...(hasWarehouseNoColumn ? [resolvedWarehouseNo] : []),
+        resolvedMedadSalesmanId,
+        formattedDate,
+        delivery_type,
+        notes || null,
+        manager_notes || null,
+        status,
+        0,
+        0,
+        0,
+        customId,
+        condition,
+        newQuotationNumber,
+        manageraccept,
+        manageraccept_at,
+      ];
+      const insertPlaceholders = insertParams.map((_, i) => `$${i + 1}`).join(', ');
+      const insertQuery = `
+        INSERT INTO quotations (${insertColumns.join(', ')})
+        VALUES (${insertPlaceholders}) RETURNING id`;
     const quotationResult = await client.query(insertQuery, insertParams);
     const quotationId = quotationResult.rows[0].id;
 
