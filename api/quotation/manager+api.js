@@ -39,12 +39,13 @@ const executeWithRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
-const hasQuotationWarehouseNoColumn = async (client) => {
+const hasQuotationColumn = async (client, columnName) => {
   const result = await client.query(
     `SELECT 1
      FROM information_schema.columns
-     WHERE table_name = 'quotations' AND column_name = 'warehouse_no'
-     LIMIT 1`
+     WHERE table_name = 'quotations' AND column_name = $1
+     LIMIT 1`,
+    [columnName]
   );
   return result.rowCount > 0;
 };
@@ -179,13 +180,14 @@ router.post('/quotations/manager', async (req, res) => {
     const resolvedWarehouseNo = warehouse_no || resolvedDefaults.warehouse_no || null;
     const resolvedMedadSalesmanId = medad_salesman_id || resolvedDefaults.medad_salesman_id || null;
 
-    const hasWarehouseNoColumn = await hasQuotationWarehouseNoColumn(client);
+    const hasWarehouseNoColumn = await hasQuotationColumn(client, 'warehouse_no');
+    const hasMedadSalesmanIdColumn = await hasQuotationColumn(client, 'medad_salesman_id');
     const insertColumns = [
       'client_id',
       'username',
       'manager_id',
       ...(hasWarehouseNoColumn ? ['warehouse_no'] : []),
-      'medad_salesman_id',
+      ...(hasMedadSalesmanIdColumn ? ['medad_salesman_id'] : []),
       'delivery_date',
       'delivery_type',
       'notes',
@@ -201,7 +203,7 @@ router.post('/quotations/manager', async (req, res) => {
       username,
       manager_id,
       ...(hasWarehouseNoColumn ? [resolvedWarehouseNo] : []),
-      resolvedMedadSalesmanId,
+      ...(hasMedadSalesmanIdColumn ? [resolvedMedadSalesmanId] : []),
       formattedDate,
       delivery_type,
       notes || null,
