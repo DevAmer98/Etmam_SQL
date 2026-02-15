@@ -54,74 +54,158 @@ async function getMedadToken() {
   return cachedToken;
 }
 
+const parseJsonSafe = async (response) => {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+const getProducts = async (res) => {
+  const token = await getMedadToken();
+
+  const PAGE_SIZE = 100; // Medad max limit per docs
+  let page = 1;
+  const all = [];
+  const seen = new Set();
+
+  // fetch pages until no new items arrive (covers APIs that ignore pagination too)
+  while (true) {
+    const url = `${process.env.MEDAD_BASE_URL}/products?page=${page}&limit=${PAGE_SIZE}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const details = await parseJsonSafe(response);
+      console.error('Medad products error:', details);
+      return res.status(response.status).json({
+        error: 'Failed to fetch products from Medad',
+        details,
+      });
+    }
+
+    const data = (await parseJsonSafe(response)) || {};
+
+    // Normalize response
+    const items =
+      data.items ||
+      data.data ||
+      (Array.isArray(data) ? data : []);
+
+    const totalPages = data.total_pages || data.totalPages || data.totalpages;
+
+    const fresh = items.filter(p => {
+      const key = p.productNo || p.id || JSON.stringify(p);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    all.push(...fresh);
+
+    // stop if:
+    // - we reached the reported total pages
+    // - fewer than requested page size returned
+    // - no new items (duplicate-only)
+    if (
+      (totalPages && page >= totalPages) ||
+      items.length < PAGE_SIZE ||
+      fresh.length === 0 ||
+      page >= 200 // absolute safety cap
+    ) {
+      break;
+    }
+    page += 1;
+  }
+
+  return res.status(200).json({ items: all });
+};
+
+const createProduct = async (req, res) => {
+  const token = await getMedadToken();
+  const payload = req.body || {};
+
+  if (!payload.productNo || !payload.description) {
+    return res.status(400).json({ error: 'productNo and description are required' });
+  }
+
+  const response = await fetch(`${process.env.MEDAD_BASE_URL}/products`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await parseJsonSafe(response);
+  if (!response.ok) {
+    return res.status(response.status).json({
+      error: 'Failed to create Medad product',
+      details: data,
+    });
+  }
+
+  return res.status(response.status || 201).json(data || { success: true });
+};
+
+const updateProduct = async (req, res) => {
+  const token = await getMedadToken();
+  const payload = req.body || {};
+  const routeProductNo = req.params.productNo;
+  const bodyProductNo = payload.productNo;
+  const productNo = routeProductNo || bodyProductNo;
+
+  if (!productNo) {
+    return res.status(400).json({ error: 'productNo is required for update' });
+  }
+
+  const response = await fetch(`${process.env.MEDAD_BASE_URL}/products/${encodeURIComponent(productNo)}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      ...payload,
+      productNo,
+    }),
+  });
+
+  const data = await parseJsonSafe(response);
+  if (!response.ok) {
+    return res.status(response.status).json({
+      error: 'Failed to update Medad product',
+      details: data,
+    });
+  }
+
+  return res.status(response.status || 200).json(data || { success: true });
+};
+
 /* ================= PRODUCTS ENDPOINT ================= */
 export default async function medadProducts(req, res) {
   try {
-    const token = await getMedadToken();
+    if (req.method === 'GET') return await getProducts(res);
+    if (req.method === 'POST') return await createProduct(req, res);
+    if (req.method === 'PUT') return await updateProduct(req, res);
 
-    const PAGE_SIZE = 100; // Medad max limit per docs
-    let page = 1;
-    const all = [];
-    const seen = new Set();
-
-    // fetch pages until no new items arrive (covers APIs that ignore pagination too)
-    while (true) {
-      const url = `${process.env.MEDAD_BASE_URL}/products?page=${page}&limit=${PAGE_SIZE}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('Medad products error:', text);
-        return res.status(500).json({
-          error: 'Failed to fetch products from Medad',
-        });
-      }
-
-      const data = await response.json();
-
-      // Normalize response
-      const items =
-        data.items ||
-        data.data ||
-        (Array.isArray(data) ? data : []);
-
-      const totalPages = data.total_pages || data.totalPages || data.totalpages;
-
-      const fresh = items.filter(p => {
-        const key = p.productNo || p.id || JSON.stringify(p);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      all.push(...fresh);
-
-      // stop if:
-      // - we reached the reported total pages
-      // - fewer than requested page size returned
-      // - no new items (duplicate-only)
-      if (
-        (totalPages && page >= totalPages) ||
-        items.length < PAGE_SIZE ||
-        fresh.length === 0 ||
-        page >= 200 // absolute safety cap
-      ) {
-        break;
-      }
-      page += 1;
-    }
-
-    return res.status(200).json({ items: all });
+    return res.status(405).json({ error: `Method ${req.method} not allowed` });
   } catch (error) {
     console.error('Medad integration error:', error);
     return res.status(500).json({
       error: 'Medad integration error',
+      details: String(error?.message || error),
     });
   }
 }

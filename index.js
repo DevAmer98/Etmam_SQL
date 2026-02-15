@@ -70,6 +70,7 @@ import medadClientsApi from './api/client/medad/clients+api.js';
 import medadWarehouseInventoryApi from './api/medad/warehouseInventory+api.js';
 import medadInvoiceApi from './api/medad/invoice+api.js';
 import medadSalesmenApi from './api/medad/salesmen+api.js';
+import medadSuppliersApi from './api/medad/suppliers+api.js';
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -104,6 +105,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.get('/api/medad/products', medadProducts);
+app.post('/api/medad/products', medadProducts);
+app.put('/api/medad/products', medadProducts);
+app.put('/api/medad/products/:productNo', medadProducts);
 app.get('/api/medad/products/:productNo', medadProductDetails);
 
 // Mount the API routes under /api
@@ -168,6 +172,7 @@ app.use('/api', medadClientsApi);
 app.use('/api', medadWarehouseInventoryApi);
 app.use('/api', medadInvoiceApi);
 app.use('/api', medadSalesmenApi);
+app.use('/api', medadSuppliersApi);
 
 
 
