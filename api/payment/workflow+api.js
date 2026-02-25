@@ -107,17 +107,34 @@ router.get('/payments/workflow/accountant', async (req, res) => {
   const client = await pool.connect();
   try {
     await ensureTable(client);
-    const onlyPending = (req.query.status || 'pending').toString().toLowerCase() === 'pending';
+    const status = (req.query.status || 'pending').toString().toLowerCase();
+    const accountantId = (req.query.accountantId || '').toString().trim();
+
+    let whereSql = `WHERE stage = 'accountant' AND status = 'pending_accountant'`;
+    const params = [];
+
+    if (status === 'sent') {
+      whereSql = `WHERE stage = 'manager' AND status = 'pending_manager'`;
+      if (accountantId) {
+        params.push(accountantId);
+        whereSql += ` AND accountant_id = $${params.length}`;
+      }
+    } else if (status === 'all') {
+      whereSql = `WHERE (stage = 'accountant' OR stage = 'manager')`;
+      if (accountantId) {
+        params.push(accountantId);
+        whereSql += ` AND (accountant_id = $${params.length} OR accountant_id IS NULL)`;
+      }
+    }
 
     const query = `
       SELECT *
       FROM payment_workflow_requests
-      WHERE stage = 'accountant'
-      ${onlyPending ? "AND status = 'pending_accountant'" : ''}
+      ${whereSql}
       ORDER BY created_at DESC
-      LIMIT 200
+      LIMIT 300
     `;
-    const result = await withTimeout(client.query(query));
+    const result = await withTimeout(client.query(query, params));
     return res.status(200).json({ success: true, requests: result.rows });
   } catch (error) {
     console.error('Fetch accountant payment requests failed:', error);
