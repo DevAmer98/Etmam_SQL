@@ -71,6 +71,7 @@ import medadWarehouseInventoryApi from './api/medad/warehouseInventory+api.js';
 import medadInvoiceApi from './api/medad/invoice+api.js';
 import medadSalesmenApi from './api/medad/salesmen+api.js';
 import medadSuppliersApi from './api/medad/suppliers+api.js';
+import paymentWorkflowApi from './api/payment/workflow+api.js';
 
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -173,6 +174,7 @@ app.use('/api', medadWarehouseInventoryApi);
 app.use('/api', medadInvoiceApi);
 app.use('/api', medadSalesmenApi);
 app.use('/api', medadSuppliersApi);
+app.use('/api', paymentWorkflowApi);
 
 
 
