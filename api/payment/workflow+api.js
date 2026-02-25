@@ -46,6 +46,8 @@ const ensureTable = async client => {
   await withTimeout(client.query(createSql));
   const alterStatements = [
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS manager_pay_amount NUMERIC",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS remaining_amount NUMERIC",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS payment_state TEXT",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS statement TEXT",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS priority TEXT",
   ];
@@ -313,27 +315,58 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
     if (!(normalizedPriority === '1' || normalizedPriority === '2')) {
       return res.status(400).json({ error: 'priority must be 1 or 2' });
     }
+    const baseQuery = `
+      SELECT accountant_due_amount
+      FROM payment_workflow_requests
+      WHERE id = $1
+      LIMIT 1
+    `;
+    const baseResult = await withTimeout(client.query(baseQuery, [id]));
+    if (!baseResult.rows.length) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+    const accountantDue = Number(baseResult.rows[0]?.accountant_due_amount ?? 0);
+    if (!Number.isFinite(accountantDue) || accountantDue <= 0) {
+      return res.status(400).json({ error: 'accountant due amount is missing or invalid' });
+    }
+    if (numericAmountToPay > accountantDue) {
+      return res.status(400).json({ error: 'amountToPay cannot be greater than accountant due amount' });
+    }
+    const remainingAmount = Number((accountantDue - numericAmountToPay).toFixed(2));
+    const paymentState = remainingAmount > 0 ? 'partial' : 'full';
 
     const updateSql = `
       UPDATE payment_workflow_requests
       SET
         manager_pay_amount = $1,
+        remaining_amount = $2,
+        payment_state = $3,
         statement = 'PURCHASES',
-        priority = $2,
+        priority = $4,
         manager_approved = TRUE,
-        manager_name = $3,
-        manager_id = $4,
+        manager_name = $5,
+        manager_id = $6,
         manager_updated_at = CURRENT_TIMESTAMP,
-        status = 'approved_manager',
+        status = $7,
         stage = 'manager_done',
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
+      WHERE id = $8
         AND stage = 'manager'
         AND status = 'pending_manager'
       RETURNING *
     `;
+    const finalStatus = paymentState === 'partial' ? 'approved_manager_partial' : 'approved_manager';
     const result = await withTimeout(
-      client.query(updateSql, [numericAmountToPay, normalizedPriority, managerName, managerId, id]),
+      client.query(updateSql, [
+        numericAmountToPay,
+        remainingAmount,
+        paymentState,
+        normalizedPriority,
+        managerName,
+        managerId,
+        finalStatus,
+        id,
+      ]),
     );
     if (!result.rows.length) {
       return res.status(404).json({ error: 'Payment request not found in manager stage' });
