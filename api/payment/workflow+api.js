@@ -127,6 +127,47 @@ router.get('/payments/workflow/accountant', async (req, res) => {
   }
 });
 
+router.get('/payments/workflow/operation', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+    const createdByClerkId = (req.query.createdByClerkId || '').toString().trim();
+    const createdBy = (req.query.createdBy || '').toString().trim();
+    const limit = Math.min(Math.max(Number(req.query.limit || 200), 1), 500);
+
+    if (!createdByClerkId && !createdBy) {
+      return res.status(400).json({ error: 'createdByClerkId or createdBy is required' });
+    }
+
+    const whereParts = [];
+    const params = [];
+    if (createdByClerkId) {
+      params.push(createdByClerkId);
+      whereParts.push(`created_by_clerk_id = $${params.length}`);
+    }
+    if (createdBy) {
+      params.push(createdBy);
+      whereParts.push(`created_by = $${params.length}`);
+    }
+    params.push(limit);
+
+    const query = `
+      SELECT *
+      FROM payment_workflow_requests
+      WHERE ${whereParts.join(' OR ')}
+      ORDER BY created_at DESC
+      LIMIT $${params.length}
+    `;
+    const result = await withTimeout(client.query(query, params));
+    return res.status(200).json({ success: true, requests: result.rows });
+  } catch (error) {
+    console.error('Fetch operation payment requests failed:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch payment requests' });
+  } finally {
+    client.release();
+  }
+});
+
 router.patch('/payments/workflow/:id/accountant', async (req, res) => {
   const client = await pool.connect();
   try {
