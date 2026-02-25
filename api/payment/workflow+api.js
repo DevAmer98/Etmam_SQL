@@ -185,6 +185,47 @@ router.get('/payments/workflow/operation', async (req, res) => {
   }
 });
 
+router.get('/payments/workflow/manager', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+    const status = (req.query.status || 'pending').toString().toLowerCase();
+    const managerId = (req.query.managerId || '').toString().trim();
+
+    let whereSql = `WHERE stage = 'manager' AND status = 'pending_manager'`;
+    const params = [];
+
+    if (status === 'sent') {
+      whereSql = `WHERE manager_approved = TRUE`;
+      if (managerId) {
+        params.push(managerId);
+        whereSql += ` AND manager_id = $${params.length}`;
+      }
+    } else if (status === 'all') {
+      whereSql = `WHERE stage = 'manager' OR manager_approved = TRUE`;
+      if (managerId) {
+        params.push(managerId);
+        whereSql += ` AND (manager_id = $${params.length} OR manager_id IS NULL)`;
+      }
+    }
+
+    const query = `
+      SELECT *
+      FROM payment_workflow_requests
+      ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT 300
+    `;
+    const result = await withTimeout(client.query(query, params));
+    return res.status(200).json({ success: true, requests: result.rows });
+  } catch (error) {
+    console.error('Fetch manager payment requests failed:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch payment requests' });
+  } finally {
+    client.release();
+  }
+});
+
 router.patch('/payments/workflow/:id/accountant', async (req, res) => {
   const client = await pool.connect();
   try {
@@ -235,6 +276,59 @@ router.patch('/payments/workflow/:id/accountant', async (req, res) => {
     });
   } catch (error) {
     console.error('Accountant update payment request failed:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update payment request' });
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/payments/workflow/:id/manager', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureTable(client);
+    const id = Number(req.params.id);
+    const {
+      statement = null,
+      priority = null,
+      managerName = null,
+      managerId = null,
+    } = req.body || {};
+
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid request id' });
+    }
+
+    const updateSql = `
+      UPDATE payment_workflow_requests
+      SET
+        statement = $1,
+        priority = $2,
+        manager_approved = TRUE,
+        manager_name = $3,
+        manager_id = $4,
+        manager_updated_at = CURRENT_TIMESTAMP,
+        status = 'approved_manager',
+        stage = 'manager_done',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5
+        AND stage = 'manager'
+        AND status = 'pending_manager'
+      RETURNING *
+    `;
+    const result = await withTimeout(
+      client.query(updateSql, [statement, priority, managerName, managerId, id]),
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Payment request not found in manager stage' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment approved by manager',
+      request: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Manager update payment request failed:', error);
     return res.status(500).json({ error: error.message || 'Failed to update payment request' });
   } finally {
     client.release();
