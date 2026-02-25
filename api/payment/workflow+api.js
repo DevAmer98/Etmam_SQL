@@ -44,6 +44,14 @@ const ensureTable = async client => {
     );
   `;
   await withTimeout(client.query(createSql));
+  const alterStatements = [
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS manager_pay_amount NUMERIC",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS statement TEXT",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS priority TEXT",
+  ];
+  for (const sql of alterStatements) {
+    await withTimeout(client.query(sql));
+  }
 };
 
 router.post('/payments/workflow', async (req, res) => {
@@ -288,8 +296,8 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
     await ensureTable(client);
     const id = Number(req.params.id);
     const {
-      statement = null,
-      priority = null,
+      amountToPay,
+      priority,
       managerName = null,
       managerId = null,
     } = req.body || {};
@@ -297,11 +305,20 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: 'Invalid request id' });
     }
+    const numericAmountToPay = Number(amountToPay);
+    const normalizedPriority = String(priority ?? '').trim();
+    if (!Number.isFinite(numericAmountToPay) || numericAmountToPay <= 0) {
+      return res.status(400).json({ error: 'Valid amountToPay is required' });
+    }
+    if (!(normalizedPriority === '1' || normalizedPriority === '2')) {
+      return res.status(400).json({ error: 'priority must be 1 or 2' });
+    }
 
     const updateSql = `
       UPDATE payment_workflow_requests
       SET
-        statement = $1,
+        manager_pay_amount = $1,
+        statement = 'PURCHASES',
         priority = $2,
         manager_approved = TRUE,
         manager_name = $3,
@@ -316,7 +333,7 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
       RETURNING *
     `;
     const result = await withTimeout(
-      client.query(updateSql, [statement, priority, managerName, managerId, id]),
+      client.query(updateSql, [numericAmountToPay, normalizedPriority, managerName, managerId, id]),
     );
     if (!result.rows.length) {
       return res.status(404).json({ error: 'Payment request not found in manager stage' });
