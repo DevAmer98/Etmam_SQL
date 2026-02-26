@@ -4,6 +4,43 @@ import { Pool } from 'pg';
 const router = express.Router();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+let cachedToken = null;
+let tokenExpiry = 0;
+const getMedadToken = async () => {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+
+  const payload = {
+    username: process.env.MEDAD_USERNAME,
+    password: process.env.MEDAD_PASSWORD,
+    subscriptionId: process.env.MEDAD_SUBSCRIPTION_ID,
+    branch: Number(process.env.MEDAD_BRANCH),
+    year: process.env.MEDAD_YEAR,
+  };
+
+  const response = await fetch(`${process.env.MEDAD_BASE_URL}/getToken`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Medad token request failed: ${text}`);
+  }
+
+  const data = await response.json();
+  const token = data.token || data.access_token || data?.data?.token;
+  if (!token) throw new Error('Medad token not found in response');
+
+  const expiresIn = Number(data.expiresIn || data.expires_in || 3600);
+  cachedToken = token;
+  tokenExpiry = Date.now() + (expiresIn - 60) * 1000;
+  return cachedToken;
+};
+
 const withTimeout = (promise, timeout = 10000) =>
   Promise.race([
     promise,
@@ -17,6 +54,7 @@ const ensureTable = async client => {
       beneficiary_id TEXT NOT NULL,
       beneficiary_name TEXT NOT NULL,
       beneficiary_type TEXT NOT NULL,
+      beneficiary_vat_no TEXT,
       operation_amount NUMERIC NOT NULL,
       due_date DATE,
       description TEXT,
@@ -48,8 +86,11 @@ const ensureTable = async client => {
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS manager_pay_amount NUMERIC",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS remaining_amount NUMERIC",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS payment_state TEXT",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS beneficiary_vat_no TEXT",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS statement TEXT",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS priority TEXT",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS medad_synced_at TIMESTAMPTZ",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS medad_error TEXT",
   ];
   for (const sql of alterStatements) {
     await withTimeout(client.query(sql));
@@ -64,6 +105,7 @@ router.post('/payments/workflow', async (req, res) => {
       beneficiaryId,
       beneficiaryName,
       beneficiaryType,
+      beneficiaryVatNo = null,
       amount,
       dueDate,
       description = null,
@@ -80,10 +122,10 @@ router.post('/payments/workflow', async (req, res) => {
     const insertSql = `
       INSERT INTO payment_workflow_requests
       (
-        beneficiary_id, beneficiary_name, beneficiary_type, operation_amount, due_date, description,
+        beneficiary_id, beneficiary_name, beneficiary_type, beneficiary_vat_no, operation_amount, due_date, description,
         is_beneficiary_account_added, stage, status, created_by, created_by_clerk_id
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,'accountant','pending_accountant',$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'accountant','pending_accountant',$9,$10)
       RETURNING *
     `;
 
@@ -91,6 +133,7 @@ router.post('/payments/workflow', async (req, res) => {
       String(beneficiaryId),
       String(beneficiaryName),
       String(beneficiaryType),
+      isBeneficiaryAccountAdded ? (beneficiaryVatNo ? String(beneficiaryVatNo) : null) : null,
       numericAmount,
       dueDate || null,
       description,
@@ -372,10 +415,81 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
       return res.status(404).json({ error: 'Payment request not found in manager stage' });
     }
 
+    const approvedRequest = result.rows[0];
+    const paymentType = Number(process.env.MEDAD_PAYMENT_TYPE || 1);
+    const version = Number(process.env.MEDAD_PAYMENT_VERSION || 1);
+    const medadPayload = {
+      customerId: approvedRequest.beneficiary_id,
+      customerName: approvedRequest.beneficiary_name,
+      paymentType,
+      paymentAmount: Number(approvedRequest.manager_pay_amount),
+      version,
+    };
+
+    let medadResponseBody = null;
+    let medadSyncStatus = 'FAILED';
+    let medadError = null;
+
+    try {
+      const token = await getMedadToken();
+      const medadRes = await fetch(`${process.env.MEDAD_BASE_URL}/payment`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(medadPayload),
+      });
+
+      const rawText = await medadRes.text();
+      try {
+        medadResponseBody = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        medadResponseBody = { raw: rawText };
+      }
+
+      if (!medadRes.ok) {
+        medadError = rawText || `Medad payment failed with status ${medadRes.status}`;
+        medadSyncStatus = 'FAILED';
+      } else {
+        medadSyncStatus = 'SENT_TO_MEDAD';
+        medadError = null;
+      }
+    } catch (err) {
+      medadSyncStatus = 'FAILED';
+      medadError = err?.message || 'Medad payment request failed';
+      medadResponseBody = { error: medadError };
+    }
+
+    await withTimeout(
+      client.query(
+        `UPDATE payment_workflow_requests
+         SET medad_payload = $1,
+             medad_response = $2,
+             medad_sync_status = $3,
+             medad_error = $4,
+             medad_synced_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5`,
+        [medadPayload, medadResponseBody, medadSyncStatus, medadError, id],
+      ),
+    );
+
     return res.status(200).json({
       success: true,
-      message: 'Payment approved by manager',
-      request: result.rows[0],
+      message: medadSyncStatus === 'SENT_TO_MEDAD' ? 'Payment approved and sent to Medad' : 'Payment approved but Medad sync failed',
+      medad: {
+        status: medadSyncStatus,
+        error: medadError,
+        response: medadResponseBody,
+        payload: medadPayload,
+      },
+      request: {
+        ...approvedRequest,
+        medad_sync_status: medadSyncStatus,
+        medad_error: medadError,
+      },
     });
   } catch (error) {
     console.error('Manager update payment request failed:', error);

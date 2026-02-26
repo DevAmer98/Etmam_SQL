@@ -99,6 +99,7 @@ router.get('/medad/suppliers', async (req, res) => {
             supplier_name: supplierName,
             company_name: companyName,
             phone_number: phoneNumber,
+            vat_no: item.vatNo || item.vat_no || item.vat || '',
           };
         })
         .filter(Boolean);
