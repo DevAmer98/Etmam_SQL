@@ -91,6 +91,7 @@ const ensureTable = async client => {
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS priority TEXT",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS medad_synced_at TIMESTAMPTZ",
     "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS medad_error TEXT",
+    "ALTER TABLE payment_workflow_requests ADD COLUMN IF NOT EXISTS medad_http_status INT",
   ];
   for (const sql of alterStatements) {
     await withTimeout(client.query(sql));
@@ -418,8 +419,10 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
     const approvedRequest = result.rows[0];
     const paymentType = Number(process.env.MEDAD_PAYMENT_TYPE || 1);
     const version = Number(process.env.MEDAD_PAYMENT_VERSION || 1);
+    const rawCustomerId = String(approvedRequest.beneficiary_id ?? '').trim();
+    const normalizedCustomerId = /^\d+$/.test(rawCustomerId) ? Number(rawCustomerId) : rawCustomerId;
     const medadPayload = {
-      customerId: approvedRequest.beneficiary_id,
+      customerId: normalizedCustomerId,
       customerName: approvedRequest.beneficiary_name,
       paymentType,
       paymentAmount: Number(approvedRequest.manager_pay_amount),
@@ -429,6 +432,7 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
     let medadResponseBody = null;
     let medadSyncStatus = 'FAILED';
     let medadError = null;
+    let medadHttpStatus = null;
 
     try {
       const token = await getMedadToken();
@@ -441,6 +445,7 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
         },
         body: JSON.stringify(medadPayload),
       });
+      medadHttpStatus = medadRes.status;
 
       const rawText = await medadRes.text();
       try {
@@ -449,7 +454,14 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
         medadResponseBody = { raw: rawText };
       }
 
-      if (!medadRes.ok) {
+      const logicalFailure =
+        medadResponseBody?.success === false ||
+        !!medadResponseBody?.error ||
+        !!medadResponseBody?.errors ||
+        (typeof medadResponseBody?.message === 'string' &&
+          /(validation|exception|error|failed|invalid)/i.test(medadResponseBody.message));
+
+      if (!medadRes.ok || logicalFailure) {
         medadError = rawText || `Medad payment failed with status ${medadRes.status}`;
         medadSyncStatus = 'FAILED';
       } else {
@@ -469,10 +481,11 @@ router.patch('/payments/workflow/:id/manager', async (req, res) => {
              medad_response = $2,
              medad_sync_status = $3,
              medad_error = $4,
+             medad_http_status = $5,
              medad_synced_at = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5`,
-        [medadPayload, medadResponseBody, medadSyncStatus, medadError, id],
+         WHERE id = $6`,
+        [medadPayload, medadResponseBody, medadSyncStatus, medadError, medadHttpStatus, id],
       ),
     );
 
