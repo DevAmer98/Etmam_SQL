@@ -44,48 +44,32 @@ const getMedadToken = async () => {
   return cachedToken;
 };
 
-const normalize = (value) =>
-  (value || '')
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-
-const resolveCurrentUserSalesmanScope = async ({ clerkId, username }) => {
-  const normalizedUsername = normalize(username);
+const resolveCurrentUserSalesmanScope = async ({ clerkId, explicitSalesmanId }) => {
   const scope = {
     salesmanIds: new Set(),
     hasScope: false,
   };
 
-  if (!clerkId && !normalizedUsername) return scope;
+  const requestedSalesmanId = String(explicitSalesmanId || '').trim();
+  if (requestedSalesmanId) {
+    scope.hasScope = true;
+    scope.salesmanIds.add(requestedSalesmanId);
+    return scope;
+  }
+
+  if (!clerkId) return scope;
   scope.hasScope = true;
 
   const tables = ['salesreps', 'managers', 'supervisors'];
   const client = await pool.connect();
   try {
-    // First pass: resolve strictly by clerkId (most reliable).
     for (const table of tables) {
-      if (clerkId) {
-        const byClerk = await client.query(
-          `SELECT medad_salesman_id FROM ${table} WHERE clerk_id = $1 LIMIT 1`,
-          [clerkId]
-        );
-        const row = byClerk.rows[0];
-        if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
-      }
-    }
-
-    // Second pass: fallback by name only if no salesman ID was resolved.
-    if (scope.salesmanIds.size === 0 && normalizedUsername) {
-      for (const table of tables) {
-        const byName = await client.query(
-          `SELECT medad_salesman_id FROM ${table} WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
-          [normalizedUsername]
-        );
-        const row = byName.rows[0];
-        if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
-      }
+      const byClerk = await client.query(
+        `SELECT medad_salesman_id FROM ${table} WHERE clerk_id = $1 LIMIT 1`,
+        [clerkId]
+      );
+      const row = byClerk.rows[0];
+      if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
     }
   } finally {
     client.release();
@@ -113,9 +97,9 @@ const pickSalesmanName = (customer) =>
 // Lightweight Medad clients list for linking
 router.get('/medad/clients', async (req, res) => {
   try {
-    const username = (req.query.username || '').toString().trim();
     const clerkId = (req.query.clerkId || req.query.clerk_id || '').toString().trim();
-    const userScope = await resolveCurrentUserSalesmanScope({ clerkId, username });
+    const explicitSalesmanId = (req.query.medadSalesmanId || req.query.medad_salesman_id || '').toString().trim();
+    const userScope = await resolveCurrentUserSalesmanScope({ clerkId, explicitSalesmanId });
 
     // Strict rule: only return Medad customers when we have a mapped salesman ID in app DB.
     if (userScope.hasScope && userScope.salesmanIds.size === 0) {
