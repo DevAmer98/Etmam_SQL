@@ -31,6 +31,7 @@ import singleQuotationApi from './api/quotation/[id]+api.js';
 import productsApi from './api/product/create+api.js'
 import sectionsApi from './api/product/sections+api.js';
 import singleProductApi from './api/product/[id]+api.js'
+import productMinimumApi from './api/product/minimum+api.js';
 import salesOrderApi from './api/order/salesRep+api.js'; 
 import supervisorAcceptOrderApi from './api/order/acceptedOrders+api.js';
 import storekeeperAcceptOrderApi from './api/order/acceptedStorekeeper+api.js';
@@ -151,6 +152,7 @@ app.use('/api', singleAccountantApi);
 app.use('/api', singleOrderApi);
 app.use('/api', singleClientApi);
 app.use('/api', singleProductApi);
+app.use('/api', productMinimumApi);
 app.use('/api', singleSupplierApi);
 app.use('/api', singleOperationApi);
 app.use('/api', singleDriverApi);
