@@ -44,21 +44,41 @@ const getMedadToken = async () => {
   return cachedToken;
 };
 
-const resolveCurrentUserSalesmanScope = async ({ clerkId, explicitSalesmanId }) => {
+const normalizeName = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\u064B-\u065F]/g, '')
+    .replace(/[^a-z0-9\u0600-\u06ff\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+
+const resolveCurrentUserSalesmanScope = async ({ clerkId, explicitSalesmanId, clerkName }) => {
   const scope = {
     salesmanIds: new Set(),
+    salesmanNames: new Set(),
     hasScope: false,
+    mode: 'none',
   };
 
   const requestedSalesmanId = String(explicitSalesmanId || '').trim();
   if (requestedSalesmanId) {
     scope.hasScope = true;
     scope.salesmanIds.add(requestedSalesmanId);
+    scope.mode = 'id';
+    return scope;
+  }
+
+  const requestedName = normalizeName(clerkName);
+  if (requestedName) {
+    scope.hasScope = true;
+    scope.salesmanNames.add(requestedName);
+    scope.mode = 'name';
     return scope;
   }
 
   if (!clerkId) return scope;
   scope.hasScope = true;
+  scope.mode = 'id';
 
   const tables = ['salesreps', 'managers', 'supervisors'];
   const client = await pool.connect();
@@ -98,11 +118,18 @@ const pickSalesmanName = (customer) =>
 router.get('/medad/clients', async (req, res) => {
   try {
     const clerkId = (req.query.clerkId || req.query.clerk_id || '').toString().trim();
+    const clerkName = (req.query.clerkName || req.query.clerk_name || '').toString().trim();
     const explicitSalesmanId = (req.query.medadSalesmanId || req.query.medad_salesman_id || '').toString().trim();
-    const userScope = await resolveCurrentUserSalesmanScope({ clerkId, explicitSalesmanId });
+    const userScope = await resolveCurrentUserSalesmanScope({ clerkId, explicitSalesmanId, clerkName });
 
-    // Strict rule: only return Medad customers when we have a mapped salesman ID in app DB.
-    if (userScope.hasScope && userScope.salesmanIds.size === 0) {
+    // Strict rule:
+    // - id mode requires at least one salesman ID
+    // - name mode requires at least one normalized name
+    if (
+      userScope.hasScope &&
+      ((userScope.mode === 'id' && userScope.salesmanIds.size === 0) ||
+        (userScope.mode === 'name' && userScope.salesmanNames.size === 0))
+    ) {
       return res.status(200).json({
         success: true,
         clients: [],
@@ -145,8 +172,13 @@ router.get('/medad/clients', async (req, res) => {
       const normalized = batch
         .map((c) => {
           if (userScope.hasScope) {
-            const salesmanId = pickSalesmanId(c).trim();
-            if (!salesmanId || !userScope.salesmanIds.has(salesmanId)) return null;
+            if (userScope.mode === 'name') {
+              const salesmanName = normalizeName(pickSalesmanName(c));
+              if (!salesmanName || !userScope.salesmanNames.has(salesmanName)) return null;
+            } else {
+              const salesmanId = pickSalesmanId(c).trim();
+              if (!salesmanId || !userScope.salesmanIds.has(salesmanId)) return null;
+            }
           }
 
           const id = c.id?.toString() || c.customerId?.toString();
