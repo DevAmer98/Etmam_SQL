@@ -55,9 +55,7 @@ const resolveCurrentUserSalesmanScope = async ({ clerkId, username }) => {
   const normalizedUsername = normalize(username);
   const scope = {
     salesmanIds: new Set(),
-    salesmanNames: new Set(),
     hasScope: false,
-    strictById: false,
   };
 
   if (!clerkId && !normalizedUsername) return scope;
@@ -70,12 +68,11 @@ const resolveCurrentUserSalesmanScope = async ({ clerkId, username }) => {
     for (const table of tables) {
       if (clerkId) {
         const byClerk = await client.query(
-          `SELECT medad_salesman_id, name FROM ${table} WHERE clerk_id = $1 LIMIT 1`,
+          `SELECT medad_salesman_id FROM ${table} WHERE clerk_id = $1 LIMIT 1`,
           [clerkId]
         );
         const row = byClerk.rows[0];
         if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
-        if (row?.name) scope.salesmanNames.add(normalize(row.name));
       }
     }
 
@@ -83,25 +80,15 @@ const resolveCurrentUserSalesmanScope = async ({ clerkId, username }) => {
     if (scope.salesmanIds.size === 0 && normalizedUsername) {
       for (const table of tables) {
         const byName = await client.query(
-          `SELECT medad_salesman_id, name FROM ${table} WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
+          `SELECT medad_salesman_id FROM ${table} WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
           [normalizedUsername]
         );
         const row = byName.rows[0];
         if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
-        if (row?.name) scope.salesmanNames.add(normalize(row.name));
       }
     }
   } finally {
     client.release();
-  }
-
-  if (scope.salesmanIds.size > 0) {
-    scope.strictById = true;
-    // When we have a mapped salesman ID, do not widen scope by name.
-    scope.salesmanNames.clear();
-  } else if (normalizedUsername) {
-    // Name fallback only when no mapped salesman ID exists.
-    scope.salesmanNames.add(normalizedUsername);
   }
 
   return scope;
@@ -129,6 +116,15 @@ router.get('/medad/clients', async (req, res) => {
     const username = (req.query.username || '').toString().trim();
     const clerkId = (req.query.clerkId || req.query.clerk_id || '').toString().trim();
     const userScope = await resolveCurrentUserSalesmanScope({ clerkId, username });
+
+    // Strict rule: only return Medad customers when we have a mapped salesman ID in app DB.
+    if (userScope.hasScope && userScope.salesmanIds.size === 0) {
+      return res.status(200).json({
+        success: true,
+        clients: [],
+      });
+    }
+
     const token = await getMedadToken();
 
     const accountType = '0'; // 0 = customers
@@ -166,13 +162,7 @@ router.get('/medad/clients', async (req, res) => {
         .map((c) => {
           if (userScope.hasScope) {
             const salesmanId = pickSalesmanId(c).trim();
-            const salesmanName = normalize(pickSalesmanName(c));
-            if (userScope.strictById) {
-              if (!salesmanId || !userScope.salesmanIds.has(salesmanId)) return null;
-            } else {
-              const matchByName = salesmanName && userScope.salesmanNames.has(salesmanName);
-              if (!matchByName) return null;
-            }
+            if (!salesmanId || !userScope.salesmanIds.has(salesmanId)) return null;
           }
 
           const id = c.id?.toString() || c.customerId?.toString();
