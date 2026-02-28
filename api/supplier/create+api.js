@@ -1,6 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { createMedadCustomer } from '../../utils/medad.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const router = express.Router();
@@ -49,6 +50,23 @@ router.post('/suppliers', asyncHandler(async (req, res) => {
       });
     }
 
+    let medadResult;
+    try {
+      medadResult = await createMedadCustomer({
+        accountType: process.env.MEDAD_SUPPLIER_ACCOUNT_TYPE ?? '1',
+        companyName: company_name,
+        contactName: supplier_name,
+        phoneNumber: phone_number,
+        vatNo: tax_number,
+        branchName: company_name,
+      });
+    } catch (medadError) {
+      return res.status(502).json({
+        error: 'Failed to sync supplier to Medad',
+        details: medadError?.message || String(medadError),
+      });
+    }
+
     const insertQuery = `
       INSERT INTO suppliers (
         company_name, username, supplier_name, phone_number,
@@ -65,7 +83,13 @@ router.post('/suppliers', asyncHandler(async (req, res) => {
       withTimeout(supplier.query(insertQuery, values), 10000)
     );
 
-    res.status(201).json({ data: response.rows[0] });
+    res.status(201).json({
+      data: response.rows[0],
+      medad: {
+        synced: true,
+        customerId: medadResult.medadCustomerId || null,
+      },
+    });
   } finally {
     supplier.release();
   }

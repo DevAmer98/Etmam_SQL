@@ -184,8 +184,8 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
     const vatType = req.body.vatType ?? req.body.vat_type ?? null;
     const warehouseNo = req.body.warehouseNo ?? req.body.warehouse_no ?? null;
 
-    if (!clientId || !medadCustomerId || !vatNo) {
-      return res.status(400).json({ error: 'clientId, medadCustomerId, and vatNo are required' });
+    if (!clientId || !medadCustomerId) {
+      return res.status(400).json({ error: 'clientId and medadCustomerId are required' });
     }
 
     const existsQuery = `
@@ -229,7 +229,7 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
         client.query(insertQuery, [
           clientId,
           medadCustomerId,
-          vatNo,
+          vatNo || null,
           branchName,
           salesmanId,
           salesmanName,

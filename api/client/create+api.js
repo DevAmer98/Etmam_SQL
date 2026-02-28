@@ -1,6 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { createMedadCustomer } from '../../utils/medad.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const router = express.Router();
@@ -53,6 +54,28 @@ router.post('/clients', asyncHandler(async (req, res) => {
       throw new Error('العميل موجود بالفعل بنفس رقم الهاتف أو الاسم في الشركة');
     }
 
+    let medadResult;
+    try {
+      medadResult = await createMedadCustomer({
+        accountType: '0',
+        companyName: company_name,
+        contactName: client_name,
+        phoneNumber: phone_number,
+        vatNo: tax_number,
+        branchName: branch_number,
+        address1: location.street || null,
+        address2: location.region || null,
+        city: location.city || null,
+        region: location.region || null,
+        warehouseNo: process.env.MEDAD_BRANCH || null,
+      });
+    } catch (medadError) {
+      return res.status(502).json({
+        error: 'Failed to sync client to Medad',
+        details: medadError?.message || String(medadError),
+      });
+    }
+
     const insertQuery = `
       INSERT INTO clients (
         company_name, username, client_name, client_type, phone_number,
@@ -70,7 +93,48 @@ router.post('/clients', asyncHandler(async (req, res) => {
       withTimeout(client.query(insertQuery, values), 10000)
     );
 
-    res.status(201).json({ data: response.rows[0] });
+    const createdClient = response.rows[0];
+
+    // Keep local ↔ Medad mapping aligned automatically for future invoice sync.
+    if (medadResult.medadCustomerId && tax_number) {
+      const linkQuery = `
+        INSERT INTO client_medad_customers (
+          client_id, medad_customer_id, vat_no, branch_name, phone, address1, address2, city, region, is_default
+        )
+        SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM client_medad_customers
+          WHERE CAST(client_id AS TEXT) = CAST($1 AS TEXT)
+            AND CAST(medad_customer_id AS TEXT) = CAST($2 AS TEXT)
+        )
+      `;
+      const linkValues = [
+        createdClient.id,
+        medadResult.medadCustomerId,
+        tax_number,
+        branch_number || null,
+        phone_number || null,
+        location.street || null,
+        location.region || null,
+        location.city || null,
+        location.region || null,
+      ];
+
+      try {
+        await executeWithRetry(() => withTimeout(client.query(linkQuery, linkValues), 10000));
+      } catch (linkError) {
+        console.warn('Client created and synced to Medad, but local Medad link insert failed:', linkError?.message || linkError);
+      }
+    }
+
+    res.status(201).json({
+      data: createdClient,
+      medad: {
+        synced: true,
+        customerId: medadResult.medadCustomerId || null,
+      },
+    });
   } finally {
     client.release();
   }
