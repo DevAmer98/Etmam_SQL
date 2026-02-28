@@ -83,16 +83,24 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit || '10', 10);
     const page = parseInt(req.query.page || '1', 10);
     const offset = (page - 1) * limit;
+    const username = (req.query.username || '').toString().trim();
 
-    const whereParts = [];
+    const ownershipParts = [];
+    const searchParts = [];
     const params = [];
+
+    if (username) {
+      params.push(username);
+      ownershipParts.push(`LOWER(TRIM(c.username)) = LOWER(TRIM($${params.length}))`);
+    }
+
     const rawSearch = (req.query.search || '').toString().trim();
     if (rawSearch) {
       const likeTerm = `%${rawSearch}%`;
       params.push(likeTerm);
       const likeIdx = params.length;
       // Match on names in joined tables; joins follow below in the main query
-      whereParts.push(
+      searchParts.push(
         `(COALESCE(c.client_name, c.company_name, '') ILIKE $${likeIdx} OR COALESCE(m.customer_name, '') ILIKE $${likeIdx})`
       );
 
@@ -100,11 +108,14 @@ router.get('/medad/linked', asyncHandler(async (req, res) => {
       if (numericTerm) {
         params.push(numericTerm);
         const numIdx = params.length;
-        whereParts.push(`(CAST(cmc.client_id AS TEXT) = $${numIdx} OR CAST(cmc.medad_customer_id AS TEXT) = $${numIdx})`);
+        searchParts.push(`(CAST(cmc.client_id AS TEXT) = $${numIdx} OR CAST(cmc.medad_customer_id AS TEXT) = $${numIdx})`);
       }
     }
 
-    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' OR ')}` : '';
+    const whereClauses = [];
+    if (ownershipParts.length) whereClauses.push(ownershipParts.join(' AND '));
+    if (searchParts.length) whereClauses.push(`(${searchParts.join(' OR ')})`);
+    const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
 
@@ -170,6 +181,7 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
   try {
     const clientId = req.body.clientId ?? req.body.client_id;
     const medadCustomerId = req.body.medadCustomerId ?? req.body.medad_customer_id;
+    const username = (req.body.username ?? req.query.username ?? '').toString().trim();
     const vatNo = req.body.vatNo ?? req.body.vat_no;
     const branchName = req.body.branchName ?? req.body.branch_name ?? null;
     const salesmanIncoming = req.body.salesmanName ?? req.body.salesman_name ?? req.body.salesmanId ?? req.body.salesman_id ?? null;
@@ -186,6 +198,27 @@ router.post('/medad/links', asyncHandler(async (req, res) => {
 
     if (!clientId || !medadCustomerId) {
       return res.status(400).json({ error: 'clientId and medadCustomerId are required' });
+    }
+
+    if (username) {
+      const ownerCheck = await executeWithRetry(() =>
+        withTimeout(
+          client.query(
+            `
+              SELECT 1
+              FROM clients
+              WHERE CAST(id AS TEXT) = CAST($1 AS TEXT)
+                AND LOWER(TRIM(username)) = LOWER(TRIM($2))
+              LIMIT 1
+            `,
+            [clientId, username]
+          ),
+          10000
+        )
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Cannot link a client owned by another user' });
+      }
     }
 
     const existsQuery = `

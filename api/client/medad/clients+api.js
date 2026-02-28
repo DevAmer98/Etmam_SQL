@@ -1,6 +1,8 @@
 import express from 'express';
+import { Pool } from 'pg';
 
 const router = express.Router();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Simple cached token helper for Medad auth
 let cachedToken = null;
@@ -42,9 +44,91 @@ const getMedadToken = async () => {
   return cachedToken;
 };
 
-// Lightweight Medad clients list for linking
-router.get('/medad/clients', async (_req, res) => {
+const normalize = (value) =>
+  (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const resolveCurrentUserSalesmanScope = async ({ clerkId, username }) => {
+  const normalizedUsername = normalize(username);
+  const scope = {
+    salesmanIds: new Set(),
+    salesmanNames: new Set(),
+    hasScope: false,
+    strictById: false,
+  };
+
+  if (!clerkId && !normalizedUsername) return scope;
+  scope.hasScope = true;
+
+  const tables = ['salesreps', 'managers', 'supervisors'];
+  const client = await pool.connect();
   try {
+    // First pass: resolve strictly by clerkId (most reliable).
+    for (const table of tables) {
+      if (clerkId) {
+        const byClerk = await client.query(
+          `SELECT medad_salesman_id, name FROM ${table} WHERE clerk_id = $1 LIMIT 1`,
+          [clerkId]
+        );
+        const row = byClerk.rows[0];
+        if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
+        if (row?.name) scope.salesmanNames.add(normalize(row.name));
+      }
+    }
+
+    // Second pass: fallback by name only if no salesman ID was resolved.
+    if (scope.salesmanIds.size === 0 && normalizedUsername) {
+      for (const table of tables) {
+        const byName = await client.query(
+          `SELECT medad_salesman_id, name FROM ${table} WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) LIMIT 1`,
+          [normalizedUsername]
+        );
+        const row = byName.rows[0];
+        if (row?.medad_salesman_id) scope.salesmanIds.add(String(row.medad_salesman_id).trim());
+        if (row?.name) scope.salesmanNames.add(normalize(row.name));
+      }
+    }
+  } finally {
+    client.release();
+  }
+
+  if (scope.salesmanIds.size > 0) {
+    scope.strictById = true;
+    // When we have a mapped salesman ID, do not widen scope by name.
+    scope.salesmanNames.clear();
+  } else if (normalizedUsername) {
+    // Name fallback only when no mapped salesman ID exists.
+    scope.salesmanNames.add(normalizedUsername);
+  }
+
+  return scope;
+};
+
+const pickSalesmanId = (customer) =>
+  customer?.salesmanId?.toString?.() ||
+  customer?.salesman_id?.toString?.() ||
+  customer?.salesmanNo?.toString?.() ||
+  customer?.salesman_no?.toString?.() ||
+  customer?.salesId?.toString?.() ||
+  customer?.sales_id?.toString?.() ||
+  '';
+
+const pickSalesmanName = (customer) =>
+  customer?.salesmanName ||
+  customer?.salesman_name ||
+  customer?.salesman ||
+  customer?.sales_name ||
+  '';
+
+// Lightweight Medad clients list for linking
+router.get('/medad/clients', async (req, res) => {
+  try {
+    const username = (req.query.username || '').toString().trim();
+    const clerkId = (req.query.clerkId || req.query.clerk_id || '').toString().trim();
+    const userScope = await resolveCurrentUserSalesmanScope({ clerkId, username });
     const token = await getMedadToken();
 
     const accountType = '0'; // 0 = customers
@@ -80,6 +164,17 @@ router.get('/medad/clients', async (_req, res) => {
 
       const normalized = batch
         .map((c) => {
+          if (userScope.hasScope) {
+            const salesmanId = pickSalesmanId(c).trim();
+            const salesmanName = normalize(pickSalesmanName(c));
+            if (userScope.strictById) {
+              if (!salesmanId || !userScope.salesmanIds.has(salesmanId)) return null;
+            } else {
+              const matchByName = salesmanName && userScope.salesmanNames.has(salesmanName);
+              if (!matchByName) return null;
+            }
+          }
+
           const id = c.id?.toString() || c.customerId?.toString();
           if (!id || seen.has(id)) return null;
 
@@ -91,15 +186,8 @@ router.get('/medad/clients', async (_req, res) => {
             vat_no: c.vatNo || c.vat_no || '',
             phone: c.phone || c.contact1Phone || '',
             branch: c.branch || '',
-            salesman_id:
-              c.salesmanId?.toString?.() ||
-              c.salesman_id?.toString?.() ||
-              c.salesmanNo?.toString?.() ||
-              c.salesman_no?.toString?.() ||
-              c.salesId?.toString?.() ||
-              c.sales_id?.toString?.() ||
-              '',
-            salesman_name: c.salesman || c.salesmanName || '',
+            salesman_id: pickSalesmanId(c),
+            salesman_name: pickSalesmanName(c),
           };
         })
         .filter(Boolean);
